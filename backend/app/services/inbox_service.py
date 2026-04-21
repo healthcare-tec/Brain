@@ -3,6 +3,7 @@ Capture Engine + Clarification Engine service.
 """
 
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,7 +32,7 @@ async def capture(db: AsyncSession, data: InboxItemCreate) -> InboxItem:
 
 
 async def list_inbox(
-    db: AsyncSession, status: InboxStatus | None = None
+    db: AsyncSession, status: Optional[InboxStatus] = None
 ) -> list[InboxItem]:
     """List inbox items, optionally filtered by status."""
     stmt = select(InboxItem).order_by(InboxItem.captured_at.desc())
@@ -41,27 +42,41 @@ async def list_inbox(
     return list(result.scalars().all())
 
 
-async def get_inbox_item(db: AsyncSession, item_id: str) -> InboxItem | None:
+async def get_inbox_item(db: AsyncSession, item_id: str) -> Optional[InboxItem]:
     return await db.get(InboxItem, item_id)
 
 
 async def clarify(
     db: AsyncSession, item_id: str, data: InboxItemClarify
 ) -> InboxItem:
-    """Clarification Engine: process an inbox item into task/project/note/trash."""
+    """
+    Clarification Engine: process an inbox item into task/project/note/trash.
+
+    Supported values for clarified_as:
+      task    → creates a Task (status=next)
+      project → creates a Project
+      note    → creates a Note (PARA category)
+      idea    → treated as note (category=resource)
+      trash   → marks item as trashed, no entity created
+    """
     item = await db.get(InboxItem, item_id)
     if not item:
         raise ValueError("Inbox item not found")
 
     ref_id = None
+    # Normalise "idea" → "note" for entity creation
+    target = data.clarified_as if data.clarified_as != "idea" else "note"
 
-    if data.clarified_as == "task":
+    if target == "task":
+        # Map priority string to a safe value
+        priority = data.priority if data.priority in ("low", "medium", "high", "urgent") else "medium"
         task = Task(
             title=data.title or item.content[:500],
             description=data.description or item.content,
             context=data.context,
             project_id=data.project_id,
             status=TaskStatus.NEXT,
+            priority=priority,
         )
         db.add(task)
         await db.flush()
@@ -72,7 +87,7 @@ async def clarify(
             metadata={"inbox_id": item.id},
         )
 
-    elif data.clarified_as == "project":
+    elif target == "project":
         project = Project(
             name=data.title or item.content[:500],
             description=data.description or item.content,
@@ -86,7 +101,8 @@ async def clarify(
             metadata={"inbox_id": item.id, "project_id": project.id},
         )
 
-    elif data.clarified_as == "note":
+    elif target == "note":
+        # Resolve PARA category
         cat = NoteCategory.RESOURCE
         if data.category:
             try:
@@ -114,7 +130,9 @@ async def clarify(
             metadata={"inbox_id": item.id},
         )
 
-    item.status = InboxStatus.PROCESSED if data.clarified_as != "trash" else InboxStatus.TRASHED
+    item.status = (
+        InboxStatus.PROCESSED if data.clarified_as != "trash" else InboxStatus.TRASHED
+    )
     item.clarified_as = data.clarified_as
     item.clarified_ref_id = ref_id
     item.processed_at = datetime.utcnow()

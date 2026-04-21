@@ -15,6 +15,7 @@
 # Pacotes AUSENTES — instalar com:
 #   pip install -i https://mirrors.aliyun.com/pypi/simple/ -r requirements-missing.txt
 #
+python-dotenv>=1.0.0
 aiosqlite>=0.20.0
 aiofiles>=24.0.0
 alembic>=1.13.0

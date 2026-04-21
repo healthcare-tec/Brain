@@ -333,11 +333,19 @@ start_services() {
             UVICORN_CMD="$VIRTUAL_ENV/bin/uvicorn"
         fi
 
-        # Load .env from project root if it exists
-        [ -f "${SCRIPT_DIR}/.env" ] && set -a && source "${SCRIPT_DIR}/.env" && set +a
-        DATABASE_URL="sqlite+aiosqlite:///${DB_FILE}" \
-        DATABASE_URL_SYNC="sqlite:///${DB_FILE}" \
-        KNOWLEDGE_BASE_PATH="$SCRIPT_DIR/knowledge" \
+        # Load ALL variables from Brain/.env into the current shell environment
+        # so they are inherited by the nohup subprocess (including OPENAI_API_KEY)
+        if [ -f "${SCRIPT_DIR}/.env" ]; then
+            set -a
+            # shellcheck disable=SC1090
+            source "${SCRIPT_DIR}/.env"
+            set +a
+            ok "Loaded Brain/.env into backend environment"
+        fi
+        # Ensure SQLite vars are always set (override any stale DATABASE_URL from .env)
+        export DATABASE_URL="sqlite+aiosqlite:///${DB_FILE}"
+        export DATABASE_URL_SYNC="sqlite:///${DB_FILE}"
+        export KNOWLEDGE_BASE_PATH="$SCRIPT_DIR/knowledge"
         nohup $UVICORN_CMD app.main:app \
             --host 0.0.0.0 \
             --port "$BACKEND_PORT" \

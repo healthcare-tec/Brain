@@ -73,6 +73,7 @@ export default function InboxPage() {
   };
 
   const handleClarify = async (itemId, data) => {
+    // Let errors propagate so ClarifyModal can display them
     await inboxApi.clarify(itemId, data);
     setAiStates((prev) => { const next = { ...prev }; delete next[itemId]; return next; });
     await loadItems();
