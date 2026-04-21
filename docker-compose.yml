@@ -31,7 +31,7 @@ services:
       KNOWLEDGE_BASE_PATH: "/app/knowledge"
       DEBUG: "false"
     ports:
-      - "8000:8000"
+      - "8085:8085"
     volumes:
       - ./backend:/app
       - ./knowledge:/app/knowledge
@@ -47,7 +47,7 @@ services:
       target: dev
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "8080:8080"
     volumes:
       - ./frontend:/app
       - /app/node_modules

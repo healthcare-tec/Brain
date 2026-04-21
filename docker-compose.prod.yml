@@ -5,7 +5,7 @@ version: "3.9"
 
 services:
   backend:
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8085", "--workers", "2"]
     volumes:
       - ./knowledge:/app/knowledge
 
@@ -15,5 +15,5 @@ services:
       dockerfile: Dockerfile
       target: prod
     ports:
-      - "80:80"
+      - "8080:80"
     volumes: []

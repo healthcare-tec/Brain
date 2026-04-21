@@ -17,6 +17,6 @@ COPY . .
 # Create knowledge directory
 RUN mkdir -p /app/knowledge/projects /app/knowledge/areas /app/knowledge/resources /app/knowledge/archive
 
-EXPOSE 8000
+EXPOSE 8085
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8085", "--reload"]

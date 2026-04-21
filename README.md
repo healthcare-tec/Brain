@@ -66,9 +66,9 @@ cd Brain
 docker compose up --build
 
 # The system will be available at:
-# Frontend: http://localhost:3000
-# Backend API: http://localhost:8000
-# API Docs: http://localhost:8000/docs
+# Frontend: http://localhost:8080
+# Backend API: http://localhost:8085
+# API Docs: http://localhost:8085/docs
 ```
 
 ### Production Mode
@@ -77,7 +77,7 @@ docker compose up --build
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
 
 # Frontend: http://localhost (port 80)
-# Backend API: http://localhost:8000
+# Backend API: http://localhost:8085
 ```
 
 ### Run Migrations Manually
@@ -207,7 +207,7 @@ Brain/
 | `GET` | `/api/ai/patterns` | AI pattern detection (stub) |
 | `GET` | `/health` | Health check |
 
-Full interactive API documentation is available at `http://localhost:8000/docs` (Swagger UI).
+Full interactive API documentation is available at `http://localhost:8085/docs` (Swagger UI).
 
 ---
 
