@@ -53,47 +53,92 @@ Weekly review dashboard with metrics: pending inbox, completed tasks, next actio
 ## Quick Start
 
 ### Prerequisites
-- [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/)
+- [Docker](https://docs.docker.com/get-docker/) 20.10+
+- Docker Compose (V1 `docker-compose` **or** V2 plugin `docker compose`)
 
-### Run with Docker Compose
+### 1. Install Docker Compose (if not present)
+
+If `docker compose` or `docker-compose` is not available, run the helper script:
+
+```bash
+# Ubuntu/Debian — installs the official plugin
+sudo apt-get update && sudo apt-get install -y docker-compose-plugin
+
+# Verify
+docker compose version
+```
+
+Alternatively, use the bundled helper:
+
+```bash
+bash install-compose.sh
+```
+
+> **Note:** On Ubuntu 24.04 with Docker 28, use `docker-compose-plugin` via apt.
+> The legacy `docker compose up --build` syntax (with `--build` as a top-level flag) is not supported — use the commands below.
+
+### 2. Start the system
 
 ```bash
 # Clone the repository
 git clone https://github.com/healthcare-tec/Brain.git
 cd Brain
 
-# Start all services (PostgreSQL + Backend + Frontend)
+# Option A — use the bundled start script (auto-detects V1 or V2)
+bash start.sh
+
+# Option B — Docker Compose V2 (plugin)
 docker compose up --build
 
-# The system will be available at:
-# Frontend: http://localhost:8080
-# Backend API: http://localhost:8085
-# API Docs: http://localhost:8085/docs
+# Option C — Docker Compose V1 (standalone)
+docker-compose up --build
+```
+
+The system will be available at:
+- **Frontend:** http://localhost:8080
+- **Backend API:** http://localhost:8085
+- **Swagger UI:** http://localhost:8085/docs
+
+### 3. Other commands via start.sh
+
+```bash
+bash start.sh up        # Start (default)
+bash start.sh down      # Stop all services
+bash start.sh restart   # Rebuild and restart
+bash start.sh logs      # Follow logs
+bash start.sh migrate   # Run Alembic migrations
+bash start.sh test      # Run backend tests
 ```
 
 ### Production Mode
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+# or
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
 
-# Frontend: http://localhost (port 80)
+# Frontend: http://localhost:8080
 # Backend API: http://localhost:8085
 ```
 
 ### Run Migrations Manually
 
 ```bash
+# V2
 docker compose exec backend alembic upgrade head
+# V1
+docker-compose exec backend alembic upgrade head
 ```
 
 ### Run Tests
 
 ```bash
-# Install test dependencies locally
+# Inside container
+bash start.sh test
+
+# Or locally
 cd backend
 pip install -r requirements.txt
-
-# Run tests
 pytest tests/ -v
 ```
 
