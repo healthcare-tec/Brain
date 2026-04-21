@@ -22,6 +22,14 @@ DB_PORT=5432
 
 mkdir -p "$LOG_DIR" "$PID_DIR"
 
+# ── pip mirrors (tried in order until one works) ────────────────────────────
+PIP_MIRRORS=(
+    "https://mirrors.aliyun.com/pypi/simple/"       # Aliyun (China CDN, global)
+    "https://pypi.tuna.tsinghua.edu.cn/simple/"     # Tsinghua University
+    "https://mirrors.ustc.edu.cn/pypi/simple/"      # USTC
+    "https://pypi.org/simple/"                      # Official (may be blocked)
+)
+
 # ── Colors ───────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 BLUE='\033[0;34m'; CYAN='\033[0;36m'; NC='\033[0m'
@@ -150,17 +158,37 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 # HELPER: run pip in the correct context
 # ─────────────────────────────────────────────────────────────────────────────
+# Detect a working pip mirror
+detect_pip_mirror() {
+    if [ -n "$PIP_INDEX_URL" ]; then
+        return  # already set by user
+    fi
+    info "Detecting accessible pip mirror..."
+    for mirror in "${PIP_MIRRORS[@]}"; do
+        if curl -sf --max-time 5 "$mirror" -o /dev/null 2>/dev/null; then
+            export PIP_INDEX_URL="$mirror"
+            ok "Using pip mirror: $mirror"
+            return
+        fi
+    done
+    warn "No pip mirror responded. Install may fail if PyPI is blocked."
+}
+
 pip_install() {
+    local INDEX_ARGS=""
+    if [ -n "$PIP_INDEX_URL" ]; then
+        INDEX_ARGS="-i $PIP_INDEX_URL --trusted-host $(echo $PIP_INDEX_URL | sed 's|https\?://||;s|/.*||')"
+    fi
     case "$CHARLIE_VENV_MODE" in
         existing)
-            pip install --quiet "$@"
+            pip install --quiet $INDEX_ARGS "$@"
             ;;
         create)
-            "$BACKEND_DIR/.venv/bin/pip" install --quiet "$@"
+            "$BACKEND_DIR/.venv/bin/pip" install --quiet $INDEX_ARGS "$@"
             ;;
         system)
-            pip3 install --quiet --break-system-packages "$@" 2>/dev/null || \
-            pip3 install --quiet "$@"
+            pip3 install --quiet $INDEX_ARGS --break-system-packages "$@" 2>/dev/null || \
+            pip3 install --quiet $INDEX_ARGS "$@"
             ;;
     esac
 }
@@ -332,6 +360,8 @@ setup_backend() {
     section "Setting up backend"
 
     cd "$BACKEND_DIR"
+
+    detect_pip_mirror
 
     case "$CHARLIE_VENV_MODE" in
         existing)
