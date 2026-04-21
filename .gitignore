@@ -174,3 +174,4 @@ backend/charlie.db-wal
 # OS
 .DS_Store
 Thumbs.db
+*.db
