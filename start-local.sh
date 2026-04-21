@@ -158,20 +158,38 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 # HELPER: run pip in the correct context
 # ─────────────────────────────────────────────────────────────────────────────
-# Detect a working pip mirror
+# Detect a working pip mirror (uses pip itself to test, not curl)
 detect_pip_mirror() {
     if [ -n "$PIP_INDEX_URL" ]; then
         return  # already set by user
     fi
     info "Detecting accessible pip mirror..."
+    local PIP_CMD="pip"
+    command -v pip &>/dev/null || PIP_CMD="pip3"
+    if [ "$CHARLIE_VENV_MODE" = "create" ] && [ -f "$BACKEND_DIR/.venv/bin/pip" ]; then
+        PIP_CMD="$BACKEND_DIR/.venv/bin/pip"
+    fi
     for mirror in "${PIP_MIRRORS[@]}"; do
-        if curl -sf --max-time 5 "$mirror" -o /dev/null 2>/dev/null; then
+        local HOST
+        HOST=$(echo "$mirror" | sed 's|https\?://||;s|/.*||')
+        if $PIP_CMD install --dry-run --quiet \
+            -i "$mirror" --trusted-host "$HOST" \
+            pip 2>/dev/null | grep -q 'pip\|Requirement already'; then
+            export PIP_INDEX_URL="$mirror"
+            ok "Using pip mirror: $mirror"
+            return
+        fi
+        # Fallback: just try the mirror directly without dry-run
+        if $PIP_CMD index versions pip \
+            -i "$mirror" --trusted-host "$HOST" &>/dev/null 2>&1; then
             export PIP_INDEX_URL="$mirror"
             ok "Using pip mirror: $mirror"
             return
         fi
     done
-    warn "No pip mirror responded. Install may fail if PyPI is blocked."
+    # Last resort: use Aliyun unconditionally (it was confirmed working)
+    export PIP_INDEX_URL="https://mirrors.aliyun.com/pypi/simple/"
+    warn "Mirror auto-detect failed — forcing Aliyun mirror."
 }
 
 pip_install() {
@@ -297,44 +315,98 @@ install_deps() {
 setup_postgres() {
     section "Setting up PostgreSQL"
 
-    # Try to start PostgreSQL (multiple methods for different environments)
-    if command -v pg_ctlcluster &>/dev/null; then
-        PG_VERSION=$(pg_lsclusters -h 2>/dev/null | awk '{print $1}' | head -1)
-        PG_CLUSTER=$(pg_lsclusters -h 2>/dev/null | awk '{print $2}' | head -1)
-        if [ -n "$PG_VERSION" ] && [ -n "$PG_CLUSTER" ]; then
-            info "Starting PostgreSQL cluster $PG_VERSION/$PG_CLUSTER..."
-            pg_ctlcluster "$PG_VERSION" "$PG_CLUSTER" start 2>/dev/null || true
+    # ── Find the PostgreSQL data directory ───────────────────────────────────
+    find_pgdata() {
+        # Try pg_lsclusters first (Ubuntu/Debian)
+        if command -v pg_lsclusters &>/dev/null; then
+            local pgdata
+            pgdata=$(pg_lsclusters -h 2>/dev/null | awk '{print $6}' | head -1)
+            [ -n "$pgdata" ] && echo "$pgdata" && return
         fi
-    elif command -v service &>/dev/null; then
-        info "Starting PostgreSQL via service..."
-        service postgresql start 2>/dev/null || true
-    fi
+        # Common paths
+        for d in \
+            /var/lib/postgresql/*/main \
+            /var/lib/postgresql/data \
+            /usr/local/pgsql/data; do
+            [ -d "$d/base" ] && echo "$d" && return
+        done
+        echo "/var/lib/postgresql/data"
+    }
+    PGDATA_DIR=$(find_pgdata)
 
-    # Wait for PostgreSQL to be ready
-    info "Waiting for PostgreSQL to be ready..."
-    for i in $(seq 1 15); do
-        if pg_isready -h "$DB_HOST" -p "$DB_PORT" &>/dev/null 2>&1; then
-            ok "PostgreSQL is ready."
-            break
-        fi
-        sleep 1
-        if [ "$i" -eq 15 ]; then
-            warn "PostgreSQL not responding, trying manual start..."
-            if command -v postgres &>/dev/null; then
-                PGDATA="${PGDATA:-/var/lib/postgresql/data}"
-                if [ ! -d "$PGDATA/base" ]; then
-                    info "Initializing PostgreSQL data directory..."
-                    mkdir -p "$PGDATA"
-                    chown -R postgres:postgres "$PGDATA" 2>/dev/null || true
-                    su -c "initdb -D $PGDATA" postgres 2>/dev/null || \
-                    initdb -D "$PGDATA" 2>/dev/null || true
-                fi
-                su -c "pg_ctl -D $PGDATA -l $LOG_DIR/postgres.log start" postgres 2>/dev/null || \
-                pg_ctl -D "$PGDATA" -l "$LOG_DIR/postgres.log" start 2>/dev/null || true
-                sleep 3
+    # ── Try to start PostgreSQL (multiple methods) ───────────────────────────
+    start_pg() {
+        # Method 1: pg_ctlcluster (Ubuntu with systemd)
+        if command -v pg_ctlcluster &>/dev/null; then
+            local ver clus
+            ver=$(pg_lsclusters -h 2>/dev/null | awk '{print $1}' | head -1)
+            clus=$(pg_lsclusters -h 2>/dev/null | awk '{print $2}' | head -1)
+            if [ -n "$ver" ] && [ -n "$clus" ]; then
+                info "Trying pg_ctlcluster $ver/$clus..."
+                pg_ctlcluster "$ver" "$clus" start 2>/dev/null && return 0 || true
             fi
         fi
-    done
+
+        # Method 2: pg_ctl as postgres user (proot-distro, no systemd)
+        if command -v pg_ctl &>/dev/null && id postgres &>/dev/null; then
+            info "Trying pg_ctl as postgres user..."
+            # Initialize data dir if needed
+            if [ ! -f "$PGDATA_DIR/PG_VERSION" ]; then
+                info "Initializing PostgreSQL data directory at $PGDATA_DIR..."
+                mkdir -p "$PGDATA_DIR"
+                chown postgres:postgres "$PGDATA_DIR" 2>/dev/null || true
+                su -s /bin/bash postgres -c "initdb -D '$PGDATA_DIR'" 2>/dev/null || \
+                su -c "initdb -D '$PGDATA_DIR'" postgres 2>/dev/null || true
+            fi
+            su -s /bin/bash postgres -c \
+                "pg_ctl -D '$PGDATA_DIR' -l '$LOG_DIR/postgres.log' start -w" \
+                2>/dev/null && return 0 || true
+        fi
+
+        # Method 3: pg_ctl as current user (running as postgres already)
+        if command -v pg_ctl &>/dev/null; then
+            info "Trying pg_ctl as current user..."
+            if [ ! -f "$PGDATA_DIR/PG_VERSION" ]; then
+                initdb -D "$PGDATA_DIR" 2>/dev/null || true
+            fi
+            pg_ctl -D "$PGDATA_DIR" -l "$LOG_DIR/postgres.log" start -w \
+                2>/dev/null && return 0 || true
+        fi
+
+        # Method 4: service command
+        if command -v service &>/dev/null; then
+            info "Trying service postgresql start..."
+            service postgresql start 2>/dev/null && return 0 || true
+        fi
+
+        return 1
+    }
+
+    # Check if already running
+    if pg_isready -h "$DB_HOST" -p "$DB_PORT" &>/dev/null 2>&1; then
+        ok "PostgreSQL is already running."
+    else
+        info "Starting PostgreSQL..."
+        start_pg || warn "Could not start PostgreSQL automatically."
+        # Wait up to 20 seconds
+        for i in $(seq 1 20); do
+            if pg_isready -h "$DB_HOST" -p "$DB_PORT" &>/dev/null 2>&1; then
+                ok "PostgreSQL is ready."
+                break
+            fi
+            sleep 1
+            if [ "$i" -eq 20 ]; then
+                error "PostgreSQL is not responding on port $DB_PORT."
+                echo ""
+                echo -e "  ${YELLOW}Manual fix:${NC}"
+                echo -e "  1. Find your PostgreSQL data dir:  pg_lsclusters"
+                echo -e "  2. Start it:  pg_ctl -D <data_dir> start"
+                echo -e "  3. Re-run:    bash start-local.sh start"
+                echo ""
+                exit 1
+            fi
+        done
+    fi
 
     # Create database and user
     info "Creating database '$DB_NAME' and user '$DB_USER'..."
