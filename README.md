@@ -58,24 +58,35 @@ Weekly review dashboard with metrics: pending inbox, completed tasks, next actio
 
 ### 1. Install Docker Compose (if not present)
 
-If `docker compose` or `docker-compose` is not available, run the helper script:
+> **Known issue:** `docker-compose 1.29.2` (Python-based, V1) **breaks on Python 3.12** with
+> `ModuleNotFoundError: No module named 'distutils'`.
+> The fix is to install **Docker Compose V2** (pure Go binary, no Python dependency).
 
-```bash
-# Ubuntu/Debian — installs the official plugin
-sudo apt-get update && sudo apt-get install -y docker-compose-plugin
-
-# Verify
-docker compose version
-```
-
-Alternatively, use the bundled helper:
+**Recommended fix — run the bundled installer:**
 
 ```bash
 bash install-compose.sh
 ```
 
-> **Note:** On Ubuntu 24.04 with Docker 28, use `docker-compose-plugin` via apt.
-> The legacy `docker compose up --build` syntax (with `--build` as a top-level flag) is not supported — use the commands below.
+Or manually:
+
+```bash
+# Step 1: download the V2 binary
+ARCH=$(uname -m)   # x86_64 or aarch64
+VERSION=v2.27.1
+sudo mkdir -p /usr/local/lib/docker/cli-plugins
+sudo curl -fsSL \
+  "https://github.com/docker/compose/releases/download/${VERSION}/docker-compose-linux-${ARCH}" \
+  -o /usr/local/lib/docker/cli-plugins/docker-compose
+sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+# Step 2: verify
+docker compose version
+# Docker Compose version v2.27.1
+```
+
+> After this, `docker compose` (with space, V2) works correctly.
+> The old `docker-compose` (with hyphen, V1) can be left installed — it will be ignored.
 
 ### 2. Start the system
 
