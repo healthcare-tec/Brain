@@ -1,13 +1,14 @@
 """
 Project model — Groups tasks into projects.
+Uses String columns for enum values (SQLite-compatible).
 """
 
 import uuid
+import enum
 from datetime import datetime
 
-from sqlalchemy import String, Text, DateTime, Enum as SAEnum
+from sqlalchemy import String, Text, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-import enum
 
 from app.database import Base
 
@@ -27,8 +28,8 @@ class Project(Base):
     )
     name: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[ProjectStatus] = mapped_column(
-        SAEnum(ProjectStatus), default=ProjectStatus.ACTIVE, nullable=False
+    status: Mapped[str] = mapped_column(
+        String(20), default=ProjectStatus.ACTIVE.value, nullable=False
     )
     area: Mapped[str | None] = mapped_column(
         String(200), nullable=True, comment="PARA area this project belongs to"

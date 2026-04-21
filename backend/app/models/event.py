@@ -1,14 +1,15 @@
 """
 Event System — TaskEvent model.
 All key actions generate events: captured, clarified, scheduled, completed, reviewed.
+Uses String columns for enum values (SQLite-compatible).
 """
 
 import uuid
+import enum
 from datetime import datetime
 
-from sqlalchemy import String, Text, DateTime, ForeignKey, Enum as SAEnum
+from sqlalchemy import String, Text, DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-import enum
 
 from app.database import Base
 
@@ -32,9 +33,7 @@ class TaskEvent(Base):
     task_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("tasks.id", ondelete="CASCADE"), nullable=True
     )
-    event_type: Mapped[EventType] = mapped_column(
-        SAEnum(EventType), nullable=False
-    )
+    event_type: Mapped[str] = mapped_column(String(30), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     metadata_json: Mapped[str | None] = mapped_column(
         Text, nullable=True, comment="JSON string with extra event data"

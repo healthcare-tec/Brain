@@ -1,14 +1,15 @@
 """
 Knowledge System — Note metadata model.
 Content is stored as Markdown files; this table holds metadata and indexing info.
+Uses String columns for enum values (SQLite-compatible).
 """
 
 import uuid
+import enum
 from datetime import datetime
 
-from sqlalchemy import String, Text, DateTime, Enum as SAEnum
+from sqlalchemy import String, Text, DateTime
 from sqlalchemy.orm import Mapped, mapped_column
-import enum
 
 from app.database import Base
 
@@ -27,8 +28,8 @@ class Note(Base):
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
     title: Mapped[str] = mapped_column(String(500), nullable=False)
-    category: Mapped[NoteCategory] = mapped_column(
-        SAEnum(NoteCategory), default=NoteCategory.RESOURCE, nullable=False
+    category: Mapped[str] = mapped_column(
+        String(20), default=NoteCategory.RESOURCE.value, nullable=False
     )
     tags: Mapped[str | None] = mapped_column(
         String(500), nullable=True, comment="Comma-separated tags"

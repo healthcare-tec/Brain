@@ -4,14 +4,16 @@ Charlie is a personal **Cognitive Operating System** — a stand-alone system de
 
 Charlie is not a task manager. It is a system for **thinking, deciding, and improving over time**.
 
+> **Stand-alone:** runs without Docker, without PostgreSQL, without external services. The database is SQLite — a single local file. Works on Ubuntu, proot-distro, Termux, VMs, and bare-metal servers.
+
 ---
 
 ## Architecture
 
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
-| **Backend** | FastAPI + Python 3.11 | REST API, business logic, event system |
-| **Database** | PostgreSQL | Tasks, projects, events, decision logs, note metadata |
+| **Backend** | FastAPI + Python 3.10+ | REST API, business logic, event system |
+| **Database** | SQLite (aiosqlite) | Tasks, projects, events, decision logs, note metadata |
 | **Knowledge** | Markdown filesystem (PARA) | Notes, thinking documents, knowledge base |
 | **Frontend** | React 18 + Tailwind CSS | Full web UI for all modules |
 | **Migrations** | Alembic | Database schema versioning |
@@ -50,67 +52,76 @@ Weekly review dashboard with metrics: pending inbox, completed tasks, next actio
 
 ---
 
+## Prerequisites
+
+- **Python 3.10+** with `pip`
+- **Node.js 18+** with `npm` or `pnpm`
+- No database server required (SQLite is a local file)
+
+---
+
 ## Quick Start
-
-### Prerequisites
-
-- Python 3.9+
-- Node.js 18+
-- PostgreSQL 14+
-
-> On Ubuntu/Debian, install all prerequisites with:
-> ```bash
-> apt-get update && apt-get install -y python3 python3-pip python3-venv nodejs npm postgresql postgresql-contrib
-> ```
-
-### Start Charlie (first run)
 
 ```bash
 git clone https://github.com/healthcare-tec/Brain.git
 cd Brain
+```
 
-# First run: installs deps, configures database, starts everything
+### Install missing Python packages
+
+If you are using an existing venv (e.g. **jupenv**):
+
+```bash
+pip install -i https://mirrors.aliyun.com/pypi/simple/ -r backend/requirements-missing.txt
+```
+
+To install all Python dependencies from scratch:
+
+```bash
+pip install -i https://mirrors.aliyun.com/pypi/simple/ -r backend/requirements.txt
+```
+
+### Start Charlie
+
+```bash
 bash start-local.sh
 ```
 
-The script will:
-1. Create a Python virtual environment in `backend/.venv`
-2. Install all Python dependencies
-3. Start PostgreSQL and create the `charlie` database
-4. Run Alembic migrations
-5. Install frontend dependencies
-6. Start backend on **port 8085** and frontend on **port 8080** in background
+On first run, the script asks which Python environment to use, installs dependencies, creates the SQLite database, runs migrations, and starts both services.
 
 **Access the system:**
 - Frontend UI → http://localhost:8080
 - Backend API → http://localhost:8085
 - Swagger UI  → http://localhost:8085/docs
 
-### Subsequent runs
+---
+
+## Script commands
 
 ```bash
-bash start-local.sh start
+bash start-local.sh start          # Start backend and frontend
+bash start-local.sh stop           # Stop all services
+bash start-local.sh restart        # Restart all services
+bash start-local.sh status         # Show status + database info
+bash start-local.sh logs           # Follow backend logs
+bash start-local.sh logs frontend  # Follow frontend logs
+bash start-local.sh migrate        # Run Alembic migrations manually
+bash start-local.sh reset-venv     # Reset saved venv choice
 ```
 
-### All commands
+Skip the venv prompt:
 
 ```bash
-bash start-local.sh start    # Start all services
-bash start-local.sh stop     # Stop all services
-bash start-local.sh restart  # Restart all services
-bash start-local.sh status   # Show running status
-bash start-local.sh logs     # Follow backend logs
-bash start-local.sh logs frontend  # Follow frontend logs
-bash start-local.sh migrate  # Run Alembic migrations manually
+CHARLIE_VENV_MODE=existing bash start-local.sh   # use active venv (e.g. jupenv)
+CHARLIE_VENV_MODE=create   bash start-local.sh   # create backend/.venv
+CHARLIE_VENV_MODE=system   bash start-local.sh   # use system Python
 ```
 
 ---
 
 ## CLI Mode
 
-Charlie includes a full interactive command-line interface that covers all modules. Use it when the browser is not available or when you prefer terminal interaction.
-
-### Start the CLI
+Charlie includes a full interactive command-line interface covering all modules. Use it when the browser is not available or when you prefer terminal interaction.
 
 ```bash
 # Backend must be running first
@@ -119,8 +130,6 @@ bash start-local.sh start
 # Then launch the CLI
 python3 charlie-cli.py
 ```
-
-### CLI modules
 
 | Module | Description |
 |--------|-------------|
@@ -132,7 +141,7 @@ python3 charlie-cli.py
 | **Knowledge** | Create and browse PARA notes (projects / areas / resources / archive) |
 | **Weekly Review** | Metrics dashboard + interactive review checklist |
 
-### Typical workflow
+Typical workflow:
 
 ```
 1. Quick Capture  →  dump everything on your mind into inbox
@@ -143,42 +152,50 @@ python3 charlie-cli.py
 
 ---
 
+## Database
+
+Charlie uses **SQLite** — a local file, no server, no configuration.
+
+```
+backend/charlie.db    ← database (created automatically on first run)
+knowledge/            ← Markdown files (PARA structure)
+```
+
+Inspect the database directly:
+
+```bash
+sqlite3 backend/charlie.db ".tables"
+sqlite3 backend/charlie.db "SELECT * FROM inbox_items LIMIT 5;"
+```
+
+Backup:
+
+```bash
+cp backend/charlie.db backend/charlie.db.bak
+```
+
+---
+
 ## Manual Setup (step by step)
 
 If you prefer to set up each component manually:
 
-### 1. PostgreSQL
-
-```bash
-# Start PostgreSQL
-service postgresql start   # or: pg_ctlcluster <version> main start
-
-# Create database and user
-psql -U postgres -c "CREATE USER charlie WITH PASSWORD 'charlie';"
-psql -U postgres -c "CREATE DATABASE charlie OWNER charlie;"
-```
-
-### 2. Backend
+### Backend
 
 ```bash
 cd backend
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -i https://mirrors.aliyun.com/pypi/simple/ -r requirements.txt
 
-# Environment variables
-export DATABASE_URL="postgresql+asyncpg://charlie:charlie@localhost:5432/charlie"
-export DATABASE_URL_SYNC="postgresql://charlie:charlie@localhost:5432/charlie"
-export KNOWLEDGE_BASE_PATH="../knowledge"
-
-# Run migrations
+# Run migrations (creates charlie.db automatically)
 alembic upgrade head
 
 # Start server
 uvicorn app.main:app --host 0.0.0.0 --port 8085 --reload
 ```
 
-### 3. Frontend
+### Frontend
 
 ```bash
 cd frontend
@@ -186,11 +203,10 @@ npm install        # or: pnpm install
 npm run dev -- --host 0.0.0.0 --port 8080
 ```
 
-### 4. Run tests
+### Run tests
 
 ```bash
 cd backend
-source .venv/bin/activate
 pytest tests/ -v
 ```
 
@@ -201,67 +217,32 @@ pytest tests/ -v
 ```
 Brain/
 ├── README.md                    # This file
-├── start-local.sh               # Local startup script
+├── start-local.sh               # Local startup script (no Docker required)
 ├── charlie-cli.py               # Interactive CLI (all modules)
 ├── backend/
-│   ├── requirements.txt
+│   ├── requirements.txt         # All Python dependencies
+│   ├── requirements-missing.txt # Only packages missing from jupenv
+│   ├── charlie.db               # SQLite database (created on first run)
 │   ├── alembic.ini
 │   ├── alembic/
 │   │   ├── env.py
-│   │   ├── script.py.mako
 │   │   └── versions/
 │   │       └── 001_initial_schema.py
-│   ├── app/
-│   │   ├── main.py              # FastAPI application
-│   │   ├── config.py            # Settings (env vars)
-│   │   ├── database.py          # Async SQLAlchemy engine
-│   │   ├── models/              # ORM models
-│   │   │   ├── inbox.py         # Capture Engine
-│   │   │   ├── task.py          # Task System
-│   │   │   ├── project.py       # Project management
-│   │   │   ├── event.py         # Event System
-│   │   │   ├── decision_log.py  # Thinking Engine
-│   │   │   └── note.py          # Knowledge System
-│   │   ├── schemas/             # Pydantic schemas
-│   │   ├── api/                 # FastAPI routers
-│   │   │   ├── inbox.py         # POST /api/inbox, POST /api/inbox/{id}/clarify
-│   │   │   ├── tasks.py         # CRUD + POST /api/tasks/{id}/complete
-│   │   │   ├── projects.py      # CRUD with task counts
-│   │   │   ├── decision_logs.py # CRUD for thinking notes
-│   │   │   ├── notes.py         # CRUD (DB + Markdown)
-│   │   │   ├── reviews.py       # GET /api/reviews/weekly
-│   │   │   ├── events.py        # GET /api/events
-│   │   │   └── ai.py            # AI stubs
-│   │   ├── services/            # Business logic
-│   │   ├── events/              # Event emitter
-│   │   └── ai/                  # AI stubs (L1, L2, L3)
-│   └── tests/
-│       ├── conftest.py          # Test config (SQLite in-memory)
-│       └── test_api.py          # API endpoint tests
+│   └── app/
+│       ├── main.py              # FastAPI application
+│       ├── config.py            # Settings (env vars, SQLite defaults)
+│       ├── database.py          # Async SQLAlchemy engine (SQLite/aiosqlite)
+│       ├── models/              # ORM models (String-based enums, SQLite-compatible)
+│       ├── schemas/             # Pydantic schemas
+│       ├── api/                 # FastAPI routers
+│       ├── services/            # Business logic
+│       ├── events/              # Event emitter
+│       └── ai/                  # AI stubs (L1 Classification, L2 Interpretation, L3 Analysis)
 ├── frontend/
-│   ├── package.json
-│   ├── vite.config.js
-│   ├── tailwind.config.js
-│   ├── index.html
 │   └── src/
-│       ├── main.jsx
-│       ├── App.jsx              # Router setup
-│       ├── index.css            # Tailwind CSS
-│       ├── components/
-│       │   ├── Layout.jsx       # Sidebar navigation
-│       │   ├── QuickCapture.jsx # Frictionless input
-│       │   ├── ClarifyModal.jsx # GTD clarification
-│       │   ├── TaskCard.jsx     # Task with quick Done
-│       │   └── TaskFormModal.jsx
-│       ├── pages/
-│       │   ├── InboxPage.jsx    # Capture + Clarify
-│       │   ├── TasksPage.jsx    # Next Actions
-│       │   ├── ProjectsPage.jsx # Project Dashboard
-│       │   ├── ThinkingPage.jsx # Decision Logs
-│       │   ├── NotesPage.jsx    # Knowledge Base (PARA)
-│       │   └── ReviewPage.jsx   # Weekly Review
-│       └── services/
-│           └── api.js           # API client
+│       ├── pages/               # Inbox, Tasks, Projects, Thinking, Notes, Review
+│       ├── components/          # Layout, QuickCapture, TaskCard, modals
+│       └── services/api.js      # API client
 ├── knowledge/                   # PARA structure (Markdown files)
 │   ├── projects/
 │   ├── areas/
@@ -300,7 +281,7 @@ Brain/
 | `GET` | `/api/ai/patterns` | AI pattern detection (stub) |
 | `GET` | `/health` | Health check |
 
-Full interactive API documentation is available at `http://localhost:8085/docs` (Swagger UI).
+Full interactive API documentation: `http://localhost:8085/docs`
 
 ---
 
@@ -308,7 +289,7 @@ Full interactive API documentation is available at `http://localhost:8085/docs` 
 
 > Charlie is an external System 2.
 >
-> PostgreSQL stores what you do.
+> SQLite stores what you do.
 > Markdown stores what you think.
 > Memory Palace surfaces what matters.
 > AI helps you see what you would miss.

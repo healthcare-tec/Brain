@@ -1,14 +1,15 @@
 """
 Task System — Task model.
 Supports GTD statuses: next, waiting, someday, done.
+Uses String columns for enum values (SQLite-compatible).
 """
 
 import uuid
+import enum
 from datetime import datetime
 
-from sqlalchemy import String, Text, DateTime, Integer, ForeignKey, Enum as SAEnum
+from sqlalchemy import String, Text, DateTime, Integer, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-import enum
 
 from app.database import Base
 
@@ -35,11 +36,11 @@ class Task(Base):
     )
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[TaskStatus] = mapped_column(
-        SAEnum(TaskStatus), default=TaskStatus.NEXT, nullable=False
+    status: Mapped[str] = mapped_column(
+        String(20), default=TaskStatus.NEXT.value, nullable=False
     )
-    priority: Mapped[TaskPriority] = mapped_column(
-        SAEnum(TaskPriority), default=TaskPriority.MEDIUM, nullable=False
+    priority: Mapped[str] = mapped_column(
+        String(20), default=TaskPriority.MEDIUM.value, nullable=False
     )
     context: Mapped[str | None] = mapped_column(
         String(100), nullable=True, comment="@home, @work, @computer, etc."

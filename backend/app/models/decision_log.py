@@ -1,14 +1,15 @@
 """
 Thinking Engine — Decision Log model.
 Stores metadata for thinking notes; content lives in Markdown files.
+Uses String columns for enum values (SQLite-compatible).
 """
 
 import uuid
+import enum
 from datetime import datetime
 
-from sqlalchemy import String, Text, DateTime, Enum as SAEnum
+from sqlalchemy import String, Text, DateTime
 from sqlalchemy.orm import Mapped, mapped_column
-import enum
 
 from app.database import Base
 
@@ -26,8 +27,8 @@ class DecisionLog(Base):
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
     title: Mapped[str] = mapped_column(String(500), nullable=False)
-    log_type: Mapped[DecisionLogType] = mapped_column(
-        SAEnum(DecisionLogType), default=DecisionLogType.DECISION, nullable=False
+    log_type: Mapped[str] = mapped_column(
+        String(30), default=DecisionLogType.DECISION.value, nullable=False
     )
     context: Mapped[str | None] = mapped_column(Text, nullable=True)
     hypotheses: Mapped[str | None] = mapped_column(Text, nullable=True)
