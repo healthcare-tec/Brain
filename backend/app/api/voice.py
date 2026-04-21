@@ -24,47 +24,47 @@ class VoiceCaptureResponse(BaseModel):
 
 
 async def _split_with_ai(text: str) -> list[dict]:
-    """Use OpenAI to split a voice capture into multiple inbox items."""
-    import os
-    api_key = os.environ.get("OPENAI_API_KEY") or settings.OPENAI_API_KEY
-    if not api_key:
-        # Fallback: simple sentence splitting
+    """Use the configured AI provider to split a voice capture into multiple inbox items."""
+    if not settings.ai_enabled:
         return _split_simple(text)
 
     try:
         from openai import AsyncOpenAI
-        # Support proxied endpoints via OPENAI_BASE_URL
-        base_url = os.environ.get("OPENAI_BASE_URL") or None
-        client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        from app.config import get_ai_client_params
+        params = get_ai_client_params("L2")
+        client = AsyncOpenAI(api_key=params["api_key"], base_url=params["base_url"])
+        model = params["model"]
 
-        # Use L2 model for voice splitting
-        model = os.environ.get("AI_MODEL_L2") or settings.AI_MODEL_L2
+        system_content = (
+            "You are a smart assistant that processes voice captures for a personal "
+            "productivity system. The user will speak freely and mention multiple "
+            "tasks, ideas, reminders, or notes in a single stream of consciousness.\n\n"
+            "Your job is to:\n"
+            "1. Identify each distinct actionable item, idea, or note\n"
+            "2. Separate them into individual inbox entries\n"
+            "3. Clean up the language (fix grammar, make concise)\n"
+            "4. Preserve the original intent\n\n"
+            "Return valid JSON only (no markdown fences): "
+            '{"items": [{"content": "...", "type_hint": "task|note|idea"}]}\n'
+            "Always return at least 1 item."
+        )
 
         response = await client.chat.completions.create(
             model=model,
             temperature=0.3,
-            response_format={"type": "json_object"},
             messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a smart assistant that processes voice captures for a personal "
-                        "productivity system. The user will speak freely and mention multiple "
-                        "tasks, ideas, reminders, or notes in a single stream of consciousness.\n\n"
-                        "Your job is to:\n"
-                        "1. Identify each distinct actionable item, idea, or note\n"
-                        "2. Separate them into individual inbox entries\n"
-                        "3. Clean up the language (fix grammar, make concise)\n"
-                        "4. Preserve the original intent\n\n"
-                        "Return JSON: {\"items\": [{\"content\": \"...\", \"type_hint\": \"task|note|idea\"}]}\n"
-                        "Always return at least 1 item. If the text is a single clear item, return just that one."
-                    ),
-                },
+                {"role": "system", "content": system_content},
                 {"role": "user", "content": text},
             ],
         )
 
-        result = json.loads(response.choices[0].message.content)
+        raw = response.choices[0].message.content.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
+        result = json.loads(raw)
         return result.get("items", [{"content": text, "type_hint": "task"}])
     except Exception:
         return _split_simple(text)

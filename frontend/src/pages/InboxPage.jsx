@@ -204,8 +204,9 @@ export default function InboxPage() {
           <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
           <div>
             <span className="font-semibold">IA nao configurada.</span>{' '}
-            Adicione <code className="bg-amber-100 dark:bg-amber-800 px-1 rounded">OPENAI_API_KEY</code> em{' '}
-            <code className="bg-amber-100 dark:bg-amber-800 px-1 rounded">.env (raiz do projeto)</code> para usar classificacao inteligente.
+            Configure <code className="bg-amber-100 dark:bg-amber-800 px-1 rounded">AI_PROVIDER=ollama</code> (Ollama local){' '}
+            ou <code className="bg-amber-100 dark:bg-amber-800 px-1 rounded">OPENAI_API_KEY</code> em{' '}
+            <code className="bg-amber-100 dark:bg-amber-800 px-1 rounded">.env</code> para usar classificacao inteligente.
           </div>
         </div>
       )}

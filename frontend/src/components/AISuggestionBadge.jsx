@@ -97,6 +97,7 @@ export default function AISuggestionBadge({ suggestion, loading, onApply, onEdit
 
   const style = CATEGORY_STYLES[suggestion.category] || CATEGORY_STYLES.note;
   const CategoryIcon = style.icon;
+  const providerLabel = suggestion.provider === 'ollama' ? 'Ollama' : 'GPT';
 
   return (
     <div className={`mt-2 p-3 ${style.bg} border ${style.border} rounded-lg text-xs`}>
@@ -104,7 +105,7 @@ export default function AISuggestionBadge({ suggestion, loading, onApply, onEdit
         <Sparkles className="w-3.5 h-3.5 text-charlie-500 flex-shrink-0" />
         <span className="font-semibold text-gray-700 dark:text-gray-300">AI Suggestion</span>
         {suggestion.ai_enabled && (
-          <span className="ml-1 px-1.5 py-0.5 bg-charlie-100 dark:bg-charlie-900/40 text-charlie-600 dark:text-charlie-400 rounded text-[10px] font-medium">GPT</span>
+          <span className="ml-1 px-1.5 py-0.5 bg-charlie-100 dark:bg-charlie-900/40 text-charlie-600 dark:text-charlie-400 rounded text-[10px] font-medium">{providerLabel}</span>
         )}
         <ConfidenceBar value={suggestion.confidence} />
         <button onClick={onDismiss} className="ml-auto text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"><X className="w-3.5 h-3.5" /></button>

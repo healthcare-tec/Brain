@@ -48,24 +48,32 @@ class WeeklyReviewRequest(BaseModel):
 async def ai_status():
     """
     Check AI configuration status.
-    Returns whether the AI is enabled and which models are configured.
+    Returns provider, models, and whether the AI is ready.
     """
-    import os
-    api_key = os.environ.get("OPENAI_API_KEY") or settings.OPENAI_API_KEY
-    ai_enabled = bool(api_key and len(api_key) > 8)
+    from app.config import get_ai_client_params
+    p1 = get_ai_client_params("L1")
+    p2 = get_ai_client_params("L2")
+    p3 = get_ai_client_params("L3")
+    provider = p1["provider"]
+    ai_enabled = settings.ai_enabled
+
+    if provider == "ollama":
+        message = f"AI active — Ollama ({p1['model']} / {p2['model']} / {p3['model']})"
+    elif ai_enabled:
+        message = f"AI active — OpenAI ({p1['model']} / {p2['model']} / {p3['model']})"
+    else:
+        message = "AI disabled. Set AI_PROVIDER=ollama or add OPENAI_API_KEY to .env"
 
     return {
         "ai_enabled": ai_enabled,
+        "provider": provider,
         "models": {
-            "l1_classification": os.environ.get("AI_MODEL_L1") or settings.AI_MODEL_L1,
-            "l2_interpretation": os.environ.get("AI_MODEL_L2") or settings.AI_MODEL_L2,
-            "l3_analysis": os.environ.get("AI_MODEL_L3") or settings.AI_MODEL_L3,
+            "l1_classification": p1["model"],
+            "l2_interpretation": p2["model"],
+            "l3_analysis": p3["model"],
         },
-        "message": (
-            "AI is active and ready."
-            if ai_enabled
-            else "AI is disabled. Add OPENAI_API_KEY to .env (project root) to enable."
-        ),
+        "ollama_base_url": p1.get("base_url") if provider == "ollama" else None,
+        "message": message,
     }
 
 

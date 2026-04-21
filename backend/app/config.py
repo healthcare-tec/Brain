@@ -9,6 +9,13 @@ Load order (first found wins):
   2. <project_root>/.env           — resolved via __file__ (portable)
   3. Brain/backend/.env            — legacy fallback
   4. Environment variables already in os.environ (always respected)
+
+AI Provider:
+  Set AI_PROVIDER=ollama  (default) to use a local Ollama instance.
+  Set AI_PROVIDER=openai          to use the OpenAI API directly.
+
+  Ollama:  http://localhost:11434/v1  (OpenAI-compatible endpoint)
+  OpenAI:  https://api.openai.com/v1
 """
 
 import os
@@ -30,7 +37,7 @@ _ENV_CANDIDATES = [
 # We load ALL candidate files (override=False so the first found wins and
 # existing os.environ values are never overwritten).
 try:
-    from dotenv import load_dotenv, dotenv_values
+    from dotenv import load_dotenv
 
     _loaded_env_path: str | None = None
     for _candidate in _ENV_CANDIDATES:
@@ -68,23 +75,38 @@ class Settings(BaseSettings):
     # Knowledge base path (PARA structure)
     KNOWLEDGE_BASE_PATH: str = _DEFAULT_KNOWLEDGE_PATH
 
-    # ── OpenAI / AI Cognitive Layer ──────────────────────────────────────────
+    # ── AI Provider selection ────────────────────────────────────────────────
+    # "ollama"  → local Ollama instance (default, no API key required)
+    # "openai"  → OpenAI API (requires OPENAI_API_KEY)
+    AI_PROVIDER: str = "ollama"
+
+    # ── Ollama configuration ─────────────────────────────────────────────────
+    # Ollama exposes an OpenAI-compatible API at /v1
+    OLLAMA_BASE_URL: str = "http://localhost:11434/v1"
+    OLLAMA_MODEL:    str = "gemma3:27b"   # default model for all levels
+
+    # Per-level Ollama model overrides (fall back to OLLAMA_MODEL if empty)
+    OLLAMA_MODEL_L1: str = ""   # e.g. "gemma3:4b" for faster classification
+    OLLAMA_MODEL_L2: str = ""   # e.g. "gemma3:27b" for interpretation
+    OLLAMA_MODEL_L3: str = ""   # e.g. "gemma3:27b" for analysis
+
+    # ── OpenAI configuration ─────────────────────────────────────────────────
     # Add your API key to Brain/.env (never commit — it's in .gitignore)
     # Example:  OPENAI_API_KEY=sk-...
-    OPENAI_API_KEY: str = ""
+    OPENAI_API_KEY:  str = ""
+    OPENAI_BASE_URL: str = ""   # leave empty to use the default OpenAI endpoint
 
-    # Model used for each cognitive level
-    AI_MODEL_L1: str = "gpt-4.1-nano"   # L1 Classification (fast, cheap)
-    AI_MODEL_L2: str = "gpt-4.1-mini"   # L2 Interpretation
-    AI_MODEL_L3: str = "gpt-4.1-mini"   # L3 Analysis
-    OPENAI_MODEL: str = "gpt-4.1-mini"  # Legacy fallback for older code
+    # Per-level OpenAI model overrides
+    AI_MODEL_L1: str = "gpt-4o-mini"   # L1 Classification (fast, cheap)
+    AI_MODEL_L2: str = "gpt-4o-mini"   # L2 Interpretation
+    AI_MODEL_L3: str = "gpt-4o"        # L3 Analysis
+    OPENAI_MODEL: str = "gpt-4o-mini"  # Legacy fallback for older code
 
-    # Maximum tokens per AI response
-    AI_MAX_TOKENS_L1: int = 256
-    AI_MAX_TOKENS_L2: int = 1024
-    AI_MAX_TOKENS_L3: int = 2048
+    # ── AI Parameters (shared across providers) ──────────────────────────────
+    AI_MAX_TOKENS_L1: int = 512
+    AI_MAX_TOKENS_L2: int = 2048
+    AI_MAX_TOKENS_L3: int = 4096
 
-    # Temperature per level
     AI_TEMPERATURE_L1: float = 0.1
     AI_TEMPERATURE_L2: float = 0.4
     AI_TEMPERATURE_L3: float = 0.7
@@ -94,9 +116,14 @@ class Settings(BaseSettings):
 
     @property
     def ai_enabled(self) -> bool:
-        """Returns True if an OpenAI API key is configured."""
-        key = (self.OPENAI_API_KEY or "").strip()
-        return bool(key and len(key) > 8)
+        """Returns True if a working AI provider is configured."""
+        provider = (os.environ.get("AI_PROVIDER") or self.AI_PROVIDER).lower().strip()
+        if provider == "ollama":
+            # Ollama is always considered enabled (no key required)
+            return True
+        # OpenAI — requires a non-trivial key
+        key = os.environ.get("OPENAI_API_KEY") or self.OPENAI_API_KEY or ""
+        return bool(key.strip() and len(key.strip()) > 8)
 
     class Config:
         # pydantic-settings secondary source: first existing candidate
@@ -109,3 +136,50 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+# ── Provider helper — used by all AI modules ─────────────────────────────────
+
+def get_ai_client_params(level: str = "L1") -> dict:
+    """
+    Return a dict with {api_key, base_url, model} for the active AI provider.
+
+    level: "L1" | "L2" | "L3"
+
+    Usage:
+        params = get_ai_client_params("L1")
+        client = AsyncOpenAI(api_key=params["api_key"], base_url=params["base_url"])
+        response = await client.chat.completions.create(model=params["model"], ...)
+    """
+    provider = (os.environ.get("AI_PROVIDER") or settings.AI_PROVIDER).lower().strip()
+
+    if provider == "ollama":
+        base_url = (
+            os.environ.get("OLLAMA_BASE_URL")
+            or settings.OLLAMA_BASE_URL
+            or "http://localhost:11434/v1"
+        )
+        # Per-level model: env var OLLAMA_MODEL_L1 / L2 / L3 → OLLAMA_MODEL fallback
+        level_env = os.environ.get(f"OLLAMA_MODEL_{level}")
+        level_setting = getattr(settings, f"OLLAMA_MODEL_{level}", "")
+        default_model = os.environ.get("OLLAMA_MODEL") or settings.OLLAMA_MODEL
+        model = level_env or level_setting or default_model
+        return {
+            "api_key": "ollama",   # Ollama ignores the key but the SDK requires it
+            "base_url": base_url,
+            "model": model,
+            "provider": "ollama",
+        }
+
+    # OpenAI (or any OpenAI-compatible endpoint)
+    api_key = os.environ.get("OPENAI_API_KEY") or settings.OPENAI_API_KEY
+    base_url = os.environ.get("OPENAI_BASE_URL") or settings.OPENAI_BASE_URL or None
+    level_env = os.environ.get(f"AI_MODEL_{level}")
+    level_setting = getattr(settings, f"AI_MODEL_{level}", "gpt-4o-mini")
+    model = level_env or level_setting
+    return {
+        "api_key": api_key,
+        "base_url": base_url,
+        "model": model,
+        "provider": "openai",
+    }

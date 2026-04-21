@@ -2,8 +2,14 @@
 Charlie — AI Cognitive Layer
 Level 1: Classification
 
-Classifies raw input into actionable categories using GPT.
+Classifies raw input into actionable categories.
 Fast, low-cost, deterministic (temperature=0.1).
+
+Supports two AI providers (configured via AI_PROVIDER in .env):
+  - ollama  (default) — local Ollama instance, e.g. gemma3:27b
+  - openai            — OpenAI API, e.g. gpt-4o-mini
+
+Falls back to heuristic classification if AI is unavailable.
 
 Categories:
   - task      → single actionable item with a clear next action
@@ -11,15 +17,13 @@ Categories:
   - note      → reference information, no action required
   - idea      → creative or exploratory thought, not yet actionable
   - trash     → noise, duplicate, or irrelevant content
-
-If OPENAI_API_KEY is not set, falls back to heuristic classification.
 """
 
 import json
 import logging
 from typing import Optional
 
-from app.config import settings
+from app.config import settings, get_ai_client_params
 
 logger = logging.getLogger(__name__)
 
@@ -94,34 +98,38 @@ def _stub_classify(content: str, reason: str = "AI not configured") -> dict:
 
 async def classify_input(content: str, context: Optional[str] = None) -> dict:
     """
-    Classify an inbox item using GPT L1.
-    """
-    import os
-    api_key = os.environ.get("OPENAI_API_KEY") or settings.OPENAI_API_KEY
-    ai_enabled = bool(api_key and len(api_key) > 8)
+    Classify an inbox item using the configured AI provider (L1).
 
-    if not ai_enabled:
-        logger.debug("AI not configured — using heuristic classification")
-        return _stub_classify(content, reason="add OPENAI_API_KEY to .env (project root)")
+    Uses Ollama by default (AI_PROVIDER=ollama in .env).
+    Falls back to heuristic classification on any error.
+    """
+    params = get_ai_client_params("L1")
+    provider = params["provider"]
+
+    # For OpenAI, verify the key is present
+    if provider == "openai":
+        api_key = params["api_key"]
+        if not api_key or len(api_key.strip()) <= 8:
+            logger.debug("OpenAI key not configured — using heuristic classification")
+            return _stub_classify(content, reason="add OPENAI_API_KEY to .env")
 
     try:
         from openai import AsyncOpenAI
 
-        # Support proxied endpoints (e.g. Manus sandbox) via OPENAI_BASE_URL env var
-        base_url = os.environ.get("OPENAI_BASE_URL") or None
         client = AsyncOpenAI(
-            api_key=api_key,
-            base_url=base_url,
+            api_key=params["api_key"],
+            base_url=params["base_url"],
         )
 
         user_message = content
         if context:
             user_message = f"Context: {context}\n\nItem: {content}"
 
-        # Append JSON instruction to system prompt (some models ignore response_format)
-        system_with_json = SYSTEM_PROMPT + "\n\nIMPORTANT: Respond with valid JSON only, no markdown."
+        # Append JSON instruction — some models (especially local ones) need this
+        system_with_json = SYSTEM_PROMPT + "\n\nIMPORTANT: Respond with valid JSON only, no markdown fences, no extra text."
 
-        model = os.environ.get("AI_MODEL_L1") or settings.AI_MODEL_L1
+        model = params["model"]
+        logger.debug("Classifying with provider=%s model=%s", provider, model)
 
         response = await client.chat.completions.create(
             model=model,
@@ -134,6 +142,15 @@ async def classify_input(content: str, context: Optional[str] = None) -> dict:
         )
 
         raw = response.choices[0].message.content
+
+        # Strip markdown fences if the model added them anyway
+        raw = raw.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
+
         result = json.loads(raw)
 
         # Validate and sanitize
@@ -146,17 +163,18 @@ async def classify_input(content: str, context: Optional[str] = None) -> dict:
 
         result["ai_enabled"] = True
         result["model"] = model
+        result["provider"] = provider
         return result
 
     except ImportError:
         logger.warning("openai package not installed — using heuristic classification")
         return _stub_classify(content, reason="openai package not installed")
     except Exception as exc:
-        # Key is configured but the API call failed — return heuristic result
-        # but with ai_enabled=True and the real error message so the frontend
-        # can show the actual problem instead of 'not configured'
-        logger.error("AI classification failed (key is set, API call failed): %s", exc)
+        # Provider is configured but the call failed — return heuristic result
+        # with ai_enabled=True and the real error so the frontend can show it
+        logger.error("AI classification failed (provider=%s): %s", provider, exc)
         result = _stub_classify(content, reason=f"API call failed: {str(exc)[:120]}")
-        result["ai_enabled"] = True   # key IS configured — error is in the call
+        result["ai_enabled"] = True   # provider IS configured — error is in the call
         result["ai_error"] = str(exc)
+        result["provider"] = provider
         return result

@@ -128,19 +128,15 @@ async def get_insights(db: AsyncSession = Depends(get_db)):
             "items": [],
         })
 
-    # If OpenAI is available, enhance with AI analysis
+    # Enhance with AI analysis if provider is available
     ai_analysis = None
-    import os
-    api_key = os.environ.get("OPENAI_API_KEY") or settings.OPENAI_API_KEY
-    if api_key and (data["stale_tasks"] or data["bad_estimates"]):
+    if settings.ai_enabled and (data["stale_tasks"] or data["bad_estimates"]):
         try:
             from openai import AsyncOpenAI
-            # Support proxied endpoints via OPENAI_BASE_URL
-            base_url = os.environ.get("OPENAI_BASE_URL") or None
-            client = AsyncOpenAI(api_key=api_key, base_url=base_url)
-
-            # Use L3 model for analysis
-            model = os.environ.get("AI_MODEL_L3") or settings.AI_MODEL_L3
+            from app.config import get_ai_client_params
+            params = get_ai_client_params("L3")
+            client = AsyncOpenAI(api_key=params["api_key"], base_url=params["base_url"])
+            model = params["model"]
 
             response = await client.chat.completions.create(
                 model=model,
@@ -151,14 +147,19 @@ async def get_insights(db: AsyncSession = Depends(get_db)):
                         "content": (
                             "You are a productivity coach analyzing a user's task data. "
                             "Provide 2-3 actionable insights in Portuguese (BR). Be concise and specific. "
-                            "Format as a JSON object: {\"insights\": [\"insight1\", \"insight2\"]}"
+                            "Respond with valid JSON only: {\"insights\": [\"insight1\", \"insight2\"]}"
                         ),
                     },
                     {"role": "user", "content": json.dumps(data, default=str)},
                 ],
-                response_format={"type": "json_object"},
             )
-            ai_result = json.loads(response.choices[0].message.content)
+            raw = response.choices[0].message.content.strip()
+            if raw.startswith("```"):
+                raw = raw.split("```")[1]
+                if raw.startswith("json"):
+                    raw = raw[4:]
+                raw = raw.strip()
+            ai_result = json.loads(raw)
             ai_analysis = ai_result.get("insights", [])
         except Exception:
             pass

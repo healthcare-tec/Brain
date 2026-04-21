@@ -6,14 +6,18 @@ Provides deeper understanding of tasks, notes, and decisions.
 Extracts next actions, dependencies, risks, and context.
 Balanced model, moderate temperature.
 
-If OPENAI_API_KEY is not set, falls back to structured stub response.
+Supports two AI providers (configured via AI_PROVIDER in .env):
+  - ollama  (default) — local Ollama instance, e.g. gemma3:27b
+  - openai            — OpenAI API, e.g. gpt-4o-mini
+
+Falls back to structured stub response if AI is unavailable.
 """
 
 import json
 import logging
 from typing import Optional
 
-from app.config import settings
+from app.config import settings, get_ai_client_params
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +106,7 @@ def _stub_interpret(content: str, interpret_type: str = "task") -> dict:
             "recommended_option": "Gather more information before deciding",
             "reversibility": "unknown",
             "urgency": "medium",
-            "information_gaps": ["AI not configured — add OPENAI_API_KEY to .env (project root)"],
+            "information_gaps": ["AI not configured — configure AI_PROVIDER in .env"],
             "second_order_effects": [],
             "ai_enabled": False,
         }
@@ -119,7 +123,7 @@ def _stub_interpret(content: str, interpret_type: str = "task") -> dict:
             "delegate_to": None,
             "related_areas": [],
             "tags": [],
-            "notes": "Add OPENAI_API_KEY to .env (project root) to enable AI interpretation",
+            "notes": "Configure AI_PROVIDER in .env to enable AI interpretation",
             "ai_enabled": False,
         }
 
@@ -144,15 +148,17 @@ async def interpret_content(
     extra_context: Optional[str] = None,
 ) -> dict:
     """
-    Interpret content using GPT L2.
+    Interpret content using the configured AI provider (L2).
     """
-    import os
-    api_key = os.environ.get("OPENAI_API_KEY") or settings.OPENAI_API_KEY
-    ai_enabled = bool(api_key and len(api_key) > 8)
+    params = get_ai_client_params("L2")
+    provider = params["provider"]
 
-    if not ai_enabled:
-        logger.debug("AI not configured — using stub interpretation")
-        return _stub_interpret(content, interpret_type)
+    # For OpenAI, verify the key is present
+    if provider == "openai":
+        api_key = params["api_key"]
+        if not api_key or len(api_key.strip()) <= 8:
+            logger.debug("OpenAI key not configured — using stub interpretation")
+            return _stub_interpret(content, interpret_type)
 
     system_prompts = {
         "task": SYSTEM_PROMPT_TASK,
@@ -160,22 +166,27 @@ async def interpret_content(
         "decision": SYSTEM_PROMPT_DECISION,
     }
     system_prompt = system_prompts.get(interpret_type, SYSTEM_PROMPT_TASK)
+    system_with_json = system_prompt + "\n\nIMPORTANT: Respond with valid JSON only, no markdown fences, no extra text."
 
     try:
         from openai import AsyncOpenAI
-        base_url = os.environ.get("OPENAI_BASE_URL") or None
-        client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+
+        client = AsyncOpenAI(
+            api_key=params["api_key"],
+            base_url=params["base_url"],
+        )
 
         user_message = content
         if extra_context:
             user_message = f"Context: {extra_context}\n\nContent: {content}"
 
-        model = os.environ.get("AI_MODEL_L2") or settings.AI_MODEL_L2
+        model = params["model"]
+        logger.debug("Interpreting with provider=%s model=%s", provider, model)
 
         response = await client.chat.completions.create(
             model=model,
             messages=[
-                {"role": "system", "content": system_prompt},
+                {"role": "system", "content": system_with_json},
                 {"role": "user", "content": user_message},
             ],
             max_tokens=settings.AI_MAX_TOKENS_L2,
@@ -183,9 +194,19 @@ async def interpret_content(
         )
 
         raw = response.choices[0].message.content
+
+        # Strip markdown fences if the model added them
+        raw = raw.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
+
         result = json.loads(raw)
         result["ai_enabled"] = True
         result["model"] = model
+        result["provider"] = provider
         result["interpret_type"] = interpret_type
         return result
 
@@ -193,7 +214,9 @@ async def interpret_content(
         logger.warning("openai package not installed — using stub interpretation")
         return _stub_interpret(content, interpret_type)
     except Exception as exc:
-        logger.error("AI interpretation failed: %s", exc)
+        logger.error("AI interpretation failed (provider=%s): %s", provider, exc)
         result = _stub_interpret(content, interpret_type)
-        result["error"] = str(exc)
+        result["ai_enabled"] = True
+        result["ai_error"] = str(exc)
+        result["provider"] = provider
         return result

@@ -1,4 +1,4 @@
-# 🧠 Charlie — Cognitive Operating System
+# Charlie — Cognitive Operating System
 
 Charlie is a personal **Cognitive Operating System** — a stand-alone system designed to capture inputs instantly, organize execution (GTD), structure knowledge (Second Brain / PARA), support deep thinking (System 2), and build a feedback loop over time.
 
@@ -41,13 +41,16 @@ Markdown-based knowledge base organized by the PARA method: **Projects**, **Area
 ### 6. Thinking Engine (System 2)
 Structured reasoning through Decision Logs, Risk Analysis, and Problem Breakdown templates. Each thinking note includes context, hypotheses, options, decision, and expected outcome.
 
-### 7. Memory Palace (stub)
-Semantic indexing and context-aware retrieval. Prepared with interfaces for future integration.
+### 7. AI Cognitive Layer
+Three levels of intelligence, powered by **Ollama** (local, default) or **OpenAI** (cloud, optional):
 
-### 8. AI Cognitive Layer (stub)
-Three levels: Classification (L1), Interpretation (L2), Analysis (L3). Prepared with stubs for future LLM integration.
+| Level | Function | Default Model |
+|-------|----------|---------------|
+| **L1 — Classification** | Classifies inbox items into task/project/note/idea/trash | `gemma3:27b` |
+| **L2 — Interpretation** | Extracts next actions, blockers, PARA category, decision analysis | `gemma3:27b` |
+| **L3 — Analysis** | Detects behavioral patterns, generates weekly review narrative | `gemma3:27b` |
 
-### 9. Feedback System
+### 8. Feedback System
 Weekly review dashboard with metrics: pending inbox, completed tasks, next actions, project progress, and time estimation accuracy.
 
 ---
@@ -56,6 +59,7 @@ Weekly review dashboard with metrics: pending inbox, completed tasks, next actio
 
 - **Python 3.10+** with `pip`
 - **Node.js 18+** with `npm` or `pnpm`
+- **Ollama** (for local AI) — install from [ollama.com](https://ollama.com)
 - No database server required (SQLite is a local file)
 
 ---
@@ -105,14 +109,60 @@ All configuration lives in a single `.env` file at the **project root** (`Brain/
 cp .env.example .env
 ```
 
-The only setting you need to add manually is the OpenAI API key to enable AI features:
+### AI Provider — Ollama (default, recommended)
+
+Charlie uses **Ollama** by default. No API key is required — it runs entirely on your machine.
+
+**Step 1 — Install Ollama:**
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+```
+
+**Step 2 — Pull the model:**
+```bash
+ollama pull gemma3:27b
+```
+
+**Step 3 — Verify Ollama is running:**
+```bash
+ollama list          # should show gemma3:27b
+curl http://localhost:11434/api/tags   # should return JSON
+```
+
+**Step 4 — Configure `.env`:**
+```ini
+# Brain/.env
+AI_PROVIDER=ollama
+OLLAMA_BASE_URL=http://localhost:11434/v1
+OLLAMA_MODEL=gemma3:27b
+```
+
+These are already the defaults — if you copy `.env.example` to `.env` without changes, Ollama will be used automatically.
+
+### AI Provider — OpenAI (optional, cloud)
+
+To use OpenAI instead of Ollama, change `.env` to:
 
 ```ini
 # Brain/.env
+AI_PROVIDER=openai
 OPENAI_API_KEY=sk-your-key-here
+# AI_MODEL_L1=gpt-4o-mini
+# AI_MODEL_L2=gpt-4o-mini
+# AI_MODEL_L3=gpt-4o
 ```
 
-All other settings (database path, knowledge base path) are auto-detected and do not need to be set manually. The backend reads `Brain/.env` first; if not found, falls back to `Brain/backend/.env` for compatibility.
+### Using a smaller model for faster classification
+
+The `gemma3:27b` model is accurate but slow on CPU. To speed up L1 classification while keeping L3 analysis at full quality:
+
+```ini
+OLLAMA_MODEL_L1=gemma3:4b    # fast, good enough for classification
+OLLAMA_MODEL_L2=gemma3:27b
+OLLAMA_MODEL_L3=gemma3:27b
+```
+
+All other settings (database path, knowledge base path) are auto-detected and do not need to be set manually.
 
 ---
 
@@ -196,6 +246,80 @@ cp backend/charlie.db backend/charlie.db.bak
 
 ---
 
+## Troubleshooting
+
+### AI not responding — Ollama
+
+**Symptom:** Clicking "IA" in the Inbox shows an error or heuristic result.
+
+**Check 1 — Is Ollama running?**
+```bash
+curl http://localhost:11434/api/tags
+```
+If this fails, start Ollama: `ollama serve`
+
+**Check 2 — Is the model downloaded?**
+```bash
+ollama list
+```
+If `gemma3:27b` is not listed: `ollama pull gemma3:27b`
+
+**Check 3 — Test the API directly:**
+```bash
+curl http://localhost:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gemma3:27b","messages":[{"role":"user","content":"hello"}],"max_tokens":10}'
+```
+
+**Check 4 — Verify Charlie's AI status:**
+```bash
+curl http://localhost:8085/api/ai/status
+```
+Should return `"ai_enabled": true` and `"provider": "ollama"`.
+
+---
+
+### OpenAI returns HTTP 421 (Misdirected Request) in proot-distro
+
+**Symptom:** `curl https://api.openai.com/v1/models` returns `HTTP/2 421` even though the API key is correct and works in other environments.
+
+**Root cause:** HTTP 421 means the server rejected the TLS connection because the SNI (Server Name Indication) in the TLS handshake did not match the `Host` header. This is a known issue in some proot-distro / Termux environments where the system's TLS stack or DNS resolver behaves differently from a standard Linux installation.
+
+**Why `curl` fails but Python `requests` may work:** The `openai` Python SDK uses `httpx` under the hood, which handles TLS negotiation differently from `curl`. If you see 421 only in `curl`, the Python SDK may still work correctly.
+
+**Solutions (in order of preference):**
+
+1. **Use Ollama instead** — the recommended approach. Ollama runs locally and has no TLS issues.
+
+2. **Test with Python directly** (bypasses curl's TLS stack):
+   ```python
+   import os, openai
+   client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+   print(client.models.list())
+   ```
+
+3. **Force HTTP/1.1 in curl:**
+   ```bash
+   curl --http1.1 https://api.openai.com/v1/models -H "Authorization: Bearer $OPENAI_API_KEY"
+   ```
+
+4. **Use httpx with HTTP/2 disabled** (if building custom code):
+   ```python
+   import httpx, openai
+   client = openai.OpenAI(
+       api_key=os.environ["OPENAI_API_KEY"],
+       http_client=httpx.Client(http2=False),
+   )
+   ```
+
+5. **Configure a proxy** if your network requires it:
+   ```ini
+   # Brain/.env
+   OPENAI_BASE_URL=https://your-proxy.example.com/v1
+   ```
+
+---
+
 ## Manual Setup (step by step)
 
 If you prefer to set up each component manually:
@@ -252,14 +376,14 @@ Brain/
 │   │       └── 001_initial_schema.py
 │   └── app/
 │       ├── main.py              # FastAPI application
-│       ├── config.py            # Settings (env vars, SQLite defaults)
+│       ├── config.py            # Settings (AI provider, env vars, SQLite defaults)
 │       ├── database.py          # Async SQLAlchemy engine (SQLite/aiosqlite)
 │       ├── models/              # ORM models (String-based enums, SQLite-compatible)
 │       ├── schemas/             # Pydantic schemas
 │       ├── api/                 # FastAPI routers
 │       ├── services/            # Business logic
 │       ├── events/              # Event emitter
-│       └── ai/                  # AI stubs (L1 Classification, L2 Interpretation, L3 Analysis)
+│       └── ai/                  # AI Cognitive Layer (L1/L2/L3 — Ollama or OpenAI)
 ├── frontend/
 │   └── src/
 │       ├── pages/               # Inbox, Tasks, Projects, Thinking, Notes, Review
@@ -298,9 +422,11 @@ Brain/
 | `GET` | `/api/notes/` | List notes (filter by PARA category) |
 | `GET` | `/api/reviews/weekly` | Weekly review summary |
 | `GET` | `/api/events/` | List system events |
-| `POST` | `/api/ai/classify` | AI classification (stub) |
-| `POST` | `/api/ai/interpret` | AI interpretation (stub) |
-| `GET` | `/api/ai/patterns` | AI pattern detection (stub) |
+| `GET` | `/api/ai/status` | AI provider status and model info |
+| `POST` | `/api/ai/classify` | AI L1 — classify inbox item |
+| `POST` | `/api/ai/interpret` | AI L2 — interpret task/note/decision |
+| `GET` | `/api/ai/patterns` | AI L3 — behavioral pattern detection |
+| `POST` | `/api/ai/weekly-review` | AI L3 — generate weekly review narrative |
 | `GET` | `/health` | Health check |
 
 Full interactive API documentation: `http://localhost:8085/docs`
