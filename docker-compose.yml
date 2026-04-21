@@ -1,0 +1,58 @@
+version: "3.9"
+
+services:
+  # ── PostgreSQL Database ──────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: charlie
+      POSTGRES_PASSWORD: charlie
+      POSTGRES_DB: charlie
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U charlie"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── FastAPI Backend ──────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://charlie:charlie@db:5432/charlie"
+      DATABASE_URL_SYNC: "postgresql://charlie:charlie@db:5432/charlie"
+      KNOWLEDGE_BASE_PATH: "/app/knowledge"
+      DEBUG: "false"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./knowledge:/app/knowledge
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── React Frontend (development) ────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: dev
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
