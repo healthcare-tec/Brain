@@ -155,13 +155,114 @@ pytest tests/ -v
 
 ---
 
+## Local Mode (No Docker)
+
+For environments where Docker is not available (containers, proot-distro, LXC, JupyterHub), Charlie can run directly on the host.
+
+### Quick start — local mode
+
+```bash
+# First run: installs all dependencies and configures the database
+bash start-local.sh
+
+# Subsequent runs
+bash start-local.sh start
+```
+
+The script automatically:
+1. Installs Python 3, Node.js, and PostgreSQL if missing
+2. Creates a Python virtual environment in `backend/.venv`
+3. Creates the `charlie` database and user in PostgreSQL
+4. Runs Alembic migrations
+5. Installs frontend dependencies
+6. Starts backend (port 8085) and frontend (port 8080) in background
+
+### Local mode commands
+
+```bash
+bash start-local.sh start    # Start all services (default)
+bash start-local.sh stop     # Stop all services
+bash start-local.sh restart  # Restart all services
+bash start-local.sh status   # Show running status
+bash start-local.sh logs     # Follow backend logs
+bash start-local.sh logs frontend  # Follow frontend logs
+bash start-local.sh migrate  # Run Alembic migrations
+```
+
+### Manual backend-only start
+
+If you only need the API (e.g. to use the CLI):
+
+```bash
+cd backend
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+
+# Set environment variables
+export DATABASE_URL="postgresql+asyncpg://charlie:charlie@localhost:5432/charlie"
+export DATABASE_URL_SYNC="postgresql://charlie:charlie@localhost:5432/charlie"
+export KNOWLEDGE_BASE_PATH="../knowledge"
+
+# Run migrations
+alembic upgrade head
+
+# Start server
+uvicorn app.main:app --host 0.0.0.0 --port 8085 --reload
+```
+
+---
+
+## CLI Mode
+
+Charlie includes a full interactive command-line interface that covers all modules. Use it when the frontend is not accessible or when you prefer terminal interaction.
+
+### Start the CLI
+
+```bash
+# Requires the backend to be running
+python3 charlie-cli.py
+
+# Connect to a custom backend URL
+python3 charlie-cli.py --api http://localhost:8085
+
+# Check connectivity only
+python3 charlie-cli.py --check
+```
+
+### CLI modules
+
+| Module | Description |
+|--------|-------------|
+| **Quick Capture** | Instantly add anything to inbox (frictionless) |
+| **Inbox** | Process inbox with GTD clarification (task/project/note/trash) |
+| **Tasks** | View next actions, add tasks, mark as DONE with metadata |
+| **Projects** | Create and manage projects, view tasks per project |
+| **Thinking** | Create Decision Logs, Risk Analysis, Problem Breakdowns |
+| **Knowledge** | Create and browse PARA notes (projects/areas/resources/archive) |
+| **Weekly Review** | Metrics dashboard + interactive review checklist |
+
+### Typical workflow
+
+```
+1. Quick Capture  →  dump everything on your mind into inbox
+2. Inbox          →  clarify each item (is it actionable?)
+3. Tasks          →  work through next actions, mark done
+4. Weekly Review  →  reflect, adjust, plan ahead
+```
+
+---
+
 ## Project Structure
 
 ```
 Brain/
 ├── README.md                    # This file
-├── docker-compose.yml           # Development environment
-├── docker-compose.prod.yml      # Production override
+├── docker-compose.yml           # Docker development environment
+├── docker-compose.prod.yml      # Docker production override
+├── start.sh                     # Docker startup script (auto-detects V1/V2)
+├── start-local.sh               # Local startup script (no Docker)
+├── install-compose.sh           # Docker Compose V2 installer
+├── charlie-cli.py               # Interactive CLI (all modules)
 ├── backend/
 │   ├── Dockerfile
 │   ├── requirements.txt
