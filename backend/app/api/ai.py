@@ -50,16 +50,20 @@ async def ai_status():
     Check AI configuration status.
     Returns whether the AI is enabled and which models are configured.
     """
+    import os
+    api_key = os.environ.get("OPENAI_API_KEY") or settings.OPENAI_API_KEY
+    ai_enabled = bool(api_key and len(api_key) > 8)
+
     return {
-        "ai_enabled": settings.ai_enabled,
+        "ai_enabled": ai_enabled,
         "models": {
-            "l1_classification": settings.AI_MODEL_L1,
-            "l2_interpretation": settings.AI_MODEL_L2,
-            "l3_analysis": settings.AI_MODEL_L3,
+            "l1_classification": os.environ.get("AI_MODEL_L1") or settings.AI_MODEL_L1,
+            "l2_interpretation": os.environ.get("AI_MODEL_L2") or settings.AI_MODEL_L2,
+            "l3_analysis": os.environ.get("AI_MODEL_L3") or settings.AI_MODEL_L3,
         },
         "message": (
             "AI is active and ready."
-            if settings.ai_enabled
+            if ai_enabled
             else "AI is disabled. Add OPENAI_API_KEY to .env (project root) to enable."
         ),
     }

@@ -95,26 +95,22 @@ def _stub_classify(content: str) -> dict:
 async def classify_input(content: str, context: Optional[str] = None) -> dict:
     """
     Classify an inbox item using GPT L1.
-
-    Args:
-        content: Raw text of the inbox item.
-        context: Optional additional context.
-
-    Returns:
-        dict with category, confidence, suggested metadata.
     """
-    if not settings.ai_enabled:
+    import os
+    api_key = os.environ.get("OPENAI_API_KEY") or settings.OPENAI_API_KEY
+    ai_enabled = bool(api_key and len(api_key) > 8)
+
+    if not ai_enabled:
         logger.debug("AI not configured — using heuristic classification")
         return _stub_classify(content)
 
     try:
-        import os
         from openai import AsyncOpenAI
 
         # Support proxied endpoints (e.g. Manus sandbox) via OPENAI_BASE_URL env var
         base_url = os.environ.get("OPENAI_BASE_URL") or None
         client = AsyncOpenAI(
-            api_key=settings.OPENAI_API_KEY,
+            api_key=api_key,
             base_url=base_url,
         )
 
@@ -125,8 +121,10 @@ async def classify_input(content: str, context: Optional[str] = None) -> dict:
         # Append JSON instruction to system prompt (some models ignore response_format)
         system_with_json = SYSTEM_PROMPT + "\n\nIMPORTANT: Respond with valid JSON only, no markdown."
 
+        model = os.environ.get("AI_MODEL_L1") or settings.AI_MODEL_L1
+
         response = await client.chat.completions.create(
-            model=settings.AI_MODEL_L1,
+            model=model,
             messages=[
                 {"role": "system", "content": system_with_json},
                 {"role": "user", "content": user_message},
@@ -147,7 +145,7 @@ async def classify_input(content: str, context: Optional[str] = None) -> dict:
             result["suggested_context"] = None
 
         result["ai_enabled"] = True
-        result["model"] = settings.AI_MODEL_L1
+        result["model"] = model
         return result
 
     except ImportError:

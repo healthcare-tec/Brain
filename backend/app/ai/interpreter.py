@@ -145,16 +145,12 @@ async def interpret_content(
 ) -> dict:
     """
     Interpret content using GPT L2.
-
-    Args:
-        content: The text to interpret.
-        interpret_type: One of "task", "note", "decision".
-        extra_context: Optional additional context string.
-
-    Returns:
-        dict with structured interpretation.
     """
-    if not settings.ai_enabled:
+    import os
+    api_key = os.environ.get("OPENAI_API_KEY") or settings.OPENAI_API_KEY
+    ai_enabled = bool(api_key and len(api_key) > 8)
+
+    if not ai_enabled:
         logger.debug("AI not configured — using stub interpretation")
         return _stub_interpret(content, interpret_type)
 
@@ -166,17 +162,18 @@ async def interpret_content(
     system_prompt = system_prompts.get(interpret_type, SYSTEM_PROMPT_TASK)
 
     try:
-        import os
         from openai import AsyncOpenAI
         base_url = os.environ.get("OPENAI_BASE_URL") or None
-        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY, base_url=base_url)
+        client = AsyncOpenAI(api_key=api_key, base_url=base_url)
 
         user_message = content
         if extra_context:
             user_message = f"Context: {extra_context}\n\nContent: {content}"
 
+        model = os.environ.get("AI_MODEL_L2") or settings.AI_MODEL_L2
+
         response = await client.chat.completions.create(
-            model=settings.AI_MODEL_L2,
+            model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message},
@@ -188,7 +185,7 @@ async def interpret_content(
         raw = response.choices[0].message.content
         result = json.loads(raw)
         result["ai_enabled"] = True
-        result["model"] = settings.AI_MODEL_L2
+        result["model"] = model
         result["interpret_type"] = interpret_type
         return result
 

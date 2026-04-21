@@ -107,23 +107,19 @@ async def detect_patterns(
 ) -> dict:
     """
     Detect behavioral patterns using GPT L3.
-
-    Args:
-        timeframe_days: Number of days to analyze.
-        task_data: Optional pre-aggregated task/event data dict.
-
-    Returns:
-        dict with patterns, insights, and recommendations.
     """
-    if not settings.ai_enabled:
+    import os
+    api_key = os.environ.get("OPENAI_API_KEY") or settings.OPENAI_API_KEY
+    ai_enabled = bool(api_key and len(api_key) > 8)
+
+    if not ai_enabled:
         logger.debug("AI not configured — using stub pattern detection")
         return _stub_patterns(timeframe_days)
 
     try:
-        import os
         from openai import AsyncOpenAI
         base_url = os.environ.get("OPENAI_BASE_URL") or None
-        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY, base_url=base_url)
+        client = AsyncOpenAI(api_key=api_key, base_url=base_url)
 
         data_summary = f"Timeframe: last {timeframe_days} days\n"
         if task_data:
@@ -131,8 +127,10 @@ async def detect_patterns(
         else:
             data_summary += "\nNo detailed task data provided — provide general insights."
 
+        model = os.environ.get("AI_MODEL_L3") or settings.AI_MODEL_L3
+
         response = await client.chat.completions.create(
-            model=settings.AI_MODEL_L3,
+            model=model,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT_PATTERNS},
                 {"role": "user", "content": data_summary},
@@ -144,7 +142,7 @@ async def detect_patterns(
         raw = response.choices[0].message.content
         result = json.loads(raw)
         result["ai_enabled"] = True
-        result["model"] = settings.AI_MODEL_L3
+        result["model"] = model
         result["timeframe_days"] = timeframe_days
         return result
 
@@ -161,14 +159,12 @@ async def detect_patterns(
 async def generate_weekly_review(review_data: Optional[dict] = None) -> dict:
     """
     Generate a weekly review narrative using GPT L3.
-
-    Args:
-        review_data: Dict with weekly metrics (tasks completed, inbox count, etc.)
-
-    Returns:
-        dict with structured weekly review insights.
     """
-    if not settings.ai_enabled:
+    import os
+    api_key = os.environ.get("OPENAI_API_KEY") or settings.OPENAI_API_KEY
+    ai_enabled = bool(api_key and len(api_key) > 8)
+
+    if not ai_enabled:
         return {
             "headline": "Weekly review (AI not configured)",
             "wins": [],
@@ -184,15 +180,16 @@ async def generate_weekly_review(review_data: Optional[dict] = None) -> dict:
         }
 
     try:
-        import os
         from openai import AsyncOpenAI
         base_url = os.environ.get("OPENAI_BASE_URL") or None
-        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY, base_url=base_url)
+        client = AsyncOpenAI(api_key=api_key, base_url=base_url)
 
         data_str = json.dumps(review_data, indent=2, default=str) if review_data else "No data provided"
 
+        model = os.environ.get("AI_MODEL_L3") or settings.AI_MODEL_L3
+
         response = await client.chat.completions.create(
-            model=settings.AI_MODEL_L3,
+            model=model,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT_REVIEW},
                 {"role": "user", "content": f"Weekly data:\n{data_str}"},
@@ -204,7 +201,7 @@ async def generate_weekly_review(review_data: Optional[dict] = None) -> dict:
         raw = response.choices[0].message.content
         result = json.loads(raw)
         result["ai_enabled"] = True
-        result["model"] = settings.AI_MODEL_L3
+        result["model"] = model
         return result
 
     except ImportError:

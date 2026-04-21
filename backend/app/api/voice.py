@@ -25,16 +25,23 @@ class VoiceCaptureResponse(BaseModel):
 
 async def _split_with_ai(text: str) -> list[dict]:
     """Use OpenAI to split a voice capture into multiple inbox items."""
-    if not settings.OPENAI_API_KEY:
+    import os
+    api_key = os.environ.get("OPENAI_API_KEY") or settings.OPENAI_API_KEY
+    if not api_key:
         # Fallback: simple sentence splitting
         return _split_simple(text)
 
     try:
         from openai import AsyncOpenAI
-        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        # Support proxied endpoints via OPENAI_BASE_URL
+        base_url = os.environ.get("OPENAI_BASE_URL") or None
+        client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+
+        # Use L2 model for voice splitting
+        model = os.environ.get("AI_MODEL_L2") or settings.AI_MODEL_L2
 
         response = await client.chat.completions.create(
-            model=settings.OPENAI_MODEL,
+            model=model,
             temperature=0.3,
             response_format={"type": "json_object"},
             messages=[

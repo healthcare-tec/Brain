@@ -77,6 +77,7 @@ class Settings(BaseSettings):
     AI_MODEL_L1: str = "gpt-4.1-nano"   # L1 Classification (fast, cheap)
     AI_MODEL_L2: str = "gpt-4.1-mini"   # L2 Interpretation
     AI_MODEL_L3: str = "gpt-4.1-mini"   # L3 Analysis
+    OPENAI_MODEL: str = "gpt-4.1-mini"  # Legacy fallback for older code
 
     # Maximum tokens per AI response
     AI_MAX_TOKENS_L1: int = 256

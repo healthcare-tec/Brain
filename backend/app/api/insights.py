@@ -130,12 +130,20 @@ async def get_insights(db: AsyncSession = Depends(get_db)):
 
     # If OpenAI is available, enhance with AI analysis
     ai_analysis = None
-    if settings.OPENAI_API_KEY and (data["stale_tasks"] or data["bad_estimates"]):
+    import os
+    api_key = os.environ.get("OPENAI_API_KEY") or settings.OPENAI_API_KEY
+    if api_key and (data["stale_tasks"] or data["bad_estimates"]):
         try:
             from openai import AsyncOpenAI
-            client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+            # Support proxied endpoints via OPENAI_BASE_URL
+            base_url = os.environ.get("OPENAI_BASE_URL") or None
+            client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+
+            # Use L3 model for analysis
+            model = os.environ.get("AI_MODEL_L3") or settings.AI_MODEL_L3
+
             response = await client.chat.completions.create(
-                model=settings.OPENAI_MODEL,
+                model=model,
                 temperature=0.7,
                 messages=[
                     {
