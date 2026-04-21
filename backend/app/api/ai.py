@@ -60,7 +60,7 @@ async def ai_status():
         "message": (
             "AI is active and ready."
             if settings.ai_enabled
-            else "AI is disabled. Add OPENAI_API_KEY to backend/.env to enable."
+            else "AI is disabled. Add OPENAI_API_KEY to .env (project root) to enable."
         ),
     }
 

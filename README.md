@@ -96,6 +96,26 @@ On first run, the script asks which Python environment to use, installs dependen
 
 ---
 
+## Configuration (`Brain/.env`)
+
+All configuration lives in a single `.env` file at the **project root** (`Brain/.env`). This file is protected by `.gitignore` and will never be committed.
+
+```bash
+# Create your .env from the example template
+cp .env.example .env
+```
+
+The only setting you need to add manually is the OpenAI API key to enable AI features:
+
+```ini
+# Brain/.env
+OPENAI_API_KEY=sk-your-key-here
+```
+
+All other settings (database path, knowledge base path) are auto-detected and do not need to be set manually. The backend reads `Brain/.env` first; if not found, falls back to `Brain/backend/.env` for compatibility.
+
+---
+
 ## Script commands
 
 ```bash
@@ -217,6 +237,8 @@ pytest tests/ -v
 ```
 Brain/
 ├── README.md                    # This file
+├── .env                         # Your configuration (copy from .env.example — never committed)
+├── .env.example                 # Configuration template
 ├── start-local.sh               # Local startup script (no Docker required)
 ├── charlie-cli.py               # Interactive CLI (all modules)
 ├── backend/

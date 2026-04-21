@@ -204,7 +204,7 @@ export default function InboxPage() {
           <div>
             <span className="font-semibold">IA nao configurada.</span>{' '}
             Adicione <code className="bg-amber-100 dark:bg-amber-800 px-1 rounded">OPENAI_API_KEY</code> em{' '}
-            <code className="bg-amber-100 dark:bg-amber-800 px-1 rounded">backend/.env</code> para usar classificacao inteligente.
+            <code className="bg-amber-100 dark:bg-amber-800 px-1 rounded">.env (raiz do projeto)</code> para usar classificacao inteligente.
           </div>
         </div>
       )}

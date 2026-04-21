@@ -7,7 +7,7 @@ Three levels of cognitive assistance:
   L3 — Analysis        : deep, creative synthesis (gpt-4o)
 
 AI amplifies thinking, does not replace it.
-Configure OPENAI_API_KEY in backend/.env to enable.
+Configure OPENAI_API_KEY in .env (project root) to enable.
 """
 
 from app.ai.classifier import classify_input

@@ -67,7 +67,7 @@ export default function AISuggestionBadge({ suggestion, loading, onApply, onEdit
             <p className="font-medium text-amber-700 dark:text-amber-400">AI not configured</p>
             <p className="text-amber-600 dark:text-amber-500 mt-0.5">
               Add your <code className="bg-amber-100 dark:bg-amber-900/40 px-1 rounded">OPENAI_API_KEY</code> to{' '}
-              <code className="bg-amber-100 dark:bg-amber-900/40 px-1 rounded">backend/.env</code>
+              <code className="bg-amber-100 dark:bg-amber-900/40 px-1 rounded">.env (raiz do projeto)</code>
             </p>
             <p className="text-amber-500 dark:text-amber-600 mt-1">Heuristic suggestion: <strong>{suggestion.category}</strong></p>
           </div>

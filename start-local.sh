@@ -270,13 +270,18 @@ setup_backend() {
 
     ok "Backend dependencies installed."
 
-    # Write .env (SQLite — no server needed)
-    # Use printf to avoid heredoc variable expansion issues with paths
-    printf 'DATABASE_URL=sqlite+aiosqlite://%s\n' "/${DB_FILE}" > .env
-    printf 'DATABASE_URL_SYNC=sqlite:///%s\n' "${DB_FILE}" >> .env
-    printf 'KNOWLEDGE_BASE_PATH=%s\n' "${SCRIPT_DIR}/knowledge" >> .env
-    printf 'DEBUG=false\n' >> .env
-    ok ".env file created (SQLite: $DB_FILE)"
+    # Write .env at PROJECT ROOT (Brain/.env) — config.py reads from there first
+    _ROOT_ENV="${SCRIPT_DIR}/.env"
+    if [ ! -f "${_ROOT_ENV}" ]; then
+        printf 'DATABASE_URL=sqlite+aiosqlite://%s\n' "/${DB_FILE}" > "${_ROOT_ENV}"
+        printf 'DATABASE_URL_SYNC=sqlite:///%s\n' "${DB_FILE}" >> "${_ROOT_ENV}"
+        printf 'KNOWLEDGE_BASE_PATH=%s\n' "${SCRIPT_DIR}/knowledge" >> "${_ROOT_ENV}"
+        printf 'DEBUG=false\n' >> "${_ROOT_ENV}"
+        ok ".env created at project root: ${_ROOT_ENV}"
+        info "To enable AI features, add: OPENAI_API_KEY=sk-... to ${_ROOT_ENV}"
+    else
+        ok ".env already exists at project root: ${_ROOT_ENV}"
+    fi
 
     # Run Alembic migrations
     info "Running database migrations..."
@@ -328,6 +333,8 @@ start_services() {
             UVICORN_CMD="$VIRTUAL_ENV/bin/uvicorn"
         fi
 
+        # Load .env from project root if it exists
+        [ -f "${SCRIPT_DIR}/.env" ] && set -a && source "${SCRIPT_DIR}/.env" && set +a
         DATABASE_URL="sqlite+aiosqlite:///${DB_FILE}" \
         DATABASE_URL_SYNC="sqlite:///${DB_FILE}" \
         KNOWLEDGE_BASE_PATH="$SCRIPT_DIR/knowledge" \

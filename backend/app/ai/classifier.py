@@ -87,7 +87,7 @@ def _stub_classify(content: str) -> dict:
         "suggested_priority": priority,
         "is_time_sensitive": False,
         "estimated_minutes": None,
-        "reasoning": "Heuristic classification (AI not configured — add OPENAI_API_KEY to backend/.env)",
+        "reasoning": "Heuristic classification (AI not configured — add OPENAI_API_KEY to .env (project root))",
         "ai_enabled": False,
     }
 

@@ -102,7 +102,7 @@ def _stub_interpret(content: str, interpret_type: str = "task") -> dict:
             "recommended_option": "Gather more information before deciding",
             "reversibility": "unknown",
             "urgency": "medium",
-            "information_gaps": ["AI not configured — add OPENAI_API_KEY to backend/.env"],
+            "information_gaps": ["AI not configured — add OPENAI_API_KEY to .env (project root)"],
             "second_order_effects": [],
             "ai_enabled": False,
         }
@@ -119,7 +119,7 @@ def _stub_interpret(content: str, interpret_type: str = "task") -> dict:
             "delegate_to": None,
             "related_areas": [],
             "tags": [],
-            "notes": "Add OPENAI_API_KEY to backend/.env to enable AI interpretation",
+            "notes": "Add OPENAI_API_KEY to .env (project root) to enable AI interpretation",
             "ai_enabled": False,
         }
 
