@@ -157,6 +157,14 @@ coverage.xml
 # Docker volumes
 pgdata/
 
+# Charlie runtime files
+backend/charlie.db
+backend/charlie.db-shm
+backend/charlie.db-wal
+.logs/
+.pids/
+.charlie-env
+
 # IDE
 .idea/
 *.swp

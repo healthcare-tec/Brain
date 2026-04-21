@@ -20,3 +20,6 @@ aiofiles>=24.0.0
 alembic>=1.13.0
 pytest>=8.0.0
 pytest-asyncio>=0.24.0
+
+# AI Cognitive Layer — necessário para integração com OpenAI
+openai>=1.40.0
