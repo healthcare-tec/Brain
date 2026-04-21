@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from pydantic import BaseModel, Field
-from app.models.task import TaskStatus, TaskPriority
+from app.models.task import TaskStatus, TaskPriority, RecurrenceType
 
 
 class TaskCreate(BaseModel):
@@ -11,9 +11,13 @@ class TaskCreate(BaseModel):
     status: TaskStatus = TaskStatus.NEXT
     priority: TaskPriority = TaskPriority.MEDIUM
     context: str | None = Field(None, max_length=100)
+    tags: str | None = Field(None, max_length=1000, description="Comma-separated tags")
     project_id: str | None = None
     estimated_time: int | None = Field(None, ge=0, description="Minutes")
     due_date: datetime | None = None
+    recurrence: RecurrenceType = RecurrenceType.NONE
+    recurrence_interval: int | None = Field(None, ge=1, description="Custom interval in days")
+    reminder_at: datetime | None = None
 
 
 class TaskUpdate(BaseModel):
@@ -22,9 +26,13 @@ class TaskUpdate(BaseModel):
     status: TaskStatus | None = None
     priority: TaskPriority | None = None
     context: str | None = None
+    tags: str | None = None
     project_id: str | None = None
     estimated_time: int | None = None
     due_date: datetime | None = None
+    recurrence: RecurrenceType | None = None
+    recurrence_interval: int | None = None
+    reminder_at: datetime | None = None
 
 
 class TaskComplete(BaseModel):
@@ -41,10 +49,15 @@ class TaskResponse(BaseModel):
     status: TaskStatus
     priority: TaskPriority
     context: str | None
+    tags: str | None
     project_id: str | None
     estimated_time: int | None
     actual_time: int | None
     due_date: datetime | None
+    recurrence: RecurrenceType
+    recurrence_interval: int | None
+    parent_task_id: str | None
+    reminder_at: datetime | None
     created_at: datetime
     completed_at: datetime | None
     updated_at: datetime

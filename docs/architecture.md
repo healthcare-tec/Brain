@@ -2,227 +2,211 @@
 
 ## System Overview
 
-Charlie is a personal Cognitive Operating System built as a stand-alone application. It follows a three-tier architecture with clear separation of concerns.
+Charlie is a personal Cognitive Operating System built as a stand-alone application. It follows a three-tier architecture with clear separation of concerns. All data is stored locally using SQLite and Markdown files — no external services required (OpenAI is optional for AI features).
 
 ---
 
 ## Architecture Diagram
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Frontend (React)                      │
-│  ┌──────┐ ┌──────┐ ┌────────┐ ┌────────┐ ┌──────────┐  │
-│  │Inbox │ │Tasks │ │Projects│ │Thinking│ │  Notes   │  │
-│  └──┬───┘ └──┬───┘ └───┬────┘ └───┬────┘ └────┬─────┘  │
-│     └────────┴─────────┴─────────┴──────────┘          │
-│                    API Service Layer                     │
-└────────────────────────┬────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                        Frontend (React + Tailwind)                    │
+│  ┌──────┐ ┌──────┐ ┌────────┐ ┌────────┐ ┌──────┐ ┌─────────────┐  │
+│  │Inbox │ │Tasks │ │Kanban  │ │Projects│ │Notes │ │  Dashboard  │  │
+│  │(D&D) │ │(Adv) │ │(D&D)  │ │        │ │(PARA)│ │ (Analytics) │  │
+│  └──┬───┘ └──┬───┘ └──┬────┘ └───┬────┘ └──┬───┘ └──────┬──────┘  │
+│  ┌──┴───┐ ┌──┴───┐ ┌──┴────┐ ┌───┴────┐ ┌──┴───┐ ┌──────┴──────┐  │
+│  │Voice │ │Think │ │Review │ │Insights│ │Search│ │  Calendar   │  │
+│  │Captur│ │  ing │ │       │ │  (AI)  │ │Global│ │  (GCal)     │  │
+│  └──────┘ └──────┘ └───────┘ └────────┘ └──────┘ └─────────────┘  │
+│                                                                      │
+│  Dark Mode ◆ Keyboard Shortcuts ◆ Notifications ◆ Export            │
+│                    API Service Layer                                  │
+└────────────────────────┬─────────────────────────────────────────────┘
                          │ HTTP/REST
-┌────────────────────────┴────────────────────────────────┐
-│                  Backend (FastAPI)                        │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │                  API Routers                      │   │
-│  │  inbox │ tasks │ projects │ notes │ reviews │ ai  │   │
-│  └──────────────────────┬───────────────────────────┘   │
-│  ┌──────────────────────┴───────────────────────────┐   │
-│  │               Service Layer                       │   │
-│  │  inbox_service │ task_service │ project_service   │   │
-│  │  note_service  │ decision_log_service │ review    │   │
-│  └──────────────────────┬───────────────────────────┘   │
-│  ┌──────────────────────┴───────────────────────────┐   │
-│  │              Event System                         │   │
-│  │  captured │ clarified │ scheduled │ completed     │   │
-│  └──────────────────────────────────────────────────┘   │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │           AI Cognitive Layer (stubs)              │   │
-│  │  L1: Classifier │ L2: Interpreter │ L3: Analyzer │   │
-│  └──────────────────────────────────────────────────┘   │
-└────────────────────────┬────────────────────────────────┘
+┌────────────────────────┴─────────────────────────────────────────────┐
+│                      Backend (FastAPI)                                │
+│  ┌───────────────────────────────────────────────────────────────┐   │
+│  │                       API Routers                             │   │
+│  │  inbox │ tasks │ projects │ notes │ reviews │ ai │ events     │   │
+│  │  search │ analytics │ export │ voice │ insights │ decision    │   │
+│  └──────────────────────────┬────────────────────────────────────┘   │
+│  ┌──────────────────────────┴────────────────────────────────────┐   │
+│  │                    Service Layer                               │   │
+│  │  inbox_service │ task_service (recurring, tags, reminders)    │   │
+│  │  project_service │ note_service │ decision_log_service        │   │
+│  │  review_service                                               │   │
+│  └──────────────────────────┬────────────────────────────────────┘   │
+│  ┌──────────────────────────┴────────────────────────────────────┐   │
+│  │                   Event System                                │   │
+│  │  captured │ clarified │ scheduled │ completed │ recurring     │   │
+│  └───────────────────────────────────────────────────────────────┘   │
+│  ┌───────────────────────────────────────────────────────────────┐   │
+│  │              AI Cognitive Layer (OpenAI GPT)                   │   │
+│  │  L1: Classifier │ L2: Interpreter │ L3: Analyzer             │   │
+│  │  Voice Splitter │ Proactive Insights │ Weekly Review AI       │   │
+│  └───────────────────────────────────────────────────────────────┘   │
+└────────────────────────┬─────────────────────────────────────────────┘
                          │
           ┌──────────────┴──────────────┐
           │                             │
 ┌─────────┴──────────┐    ┌────────────┴────────────┐
-│   PostgreSQL       │    │   Markdown Filesystem   │
+│   SQLite            │    │   Markdown Filesystem   │
 │  ┌──────────────┐  │    │  ┌───────────────────┐  │
 │  │ inbox_items  │  │    │  │ knowledge/        │  │
-│  │ tasks        │  │    │  │   projects/       │  │
-│  │ projects     │  │    │  │   areas/          │  │
-│  │ task_events  │  │    │  │   resources/      │  │
-│  │ decision_logs│  │    │  │   archive/        │  │
-│  │ notes        │  │    │  └───────────────────┘  │
-│  └──────────────┘  │    └─────────────────────────┘
+│  │ tasks (+tags │  │    │  │   projects/       │  │
+│  │  +recurring) │  │    │  │   areas/          │  │
+│  │ projects     │  │    │  │   resources/      │  │
+│  │ task_events  │  │    │  │   archive/        │  │
+│  │ decision_logs│  │    │  └───────────────────┘  │
+│  │ notes        │  │    └─────────────────────────┘
+│  └──────────────┘  │
 └────────────────────┘
 ```
+
+---
+
+## Features Overview
+
+### Quick Wins
+| Feature | Description |
+|---------|-------------|
+| **Dark Mode** | Toggle in header, CSS class strategy via Tailwind |
+| **Global Search** | Unified search across tasks, notes, projects, decision logs |
+| **Drag & Drop Inbox** | Drag items to Task/Project/Note/Trash drop zones |
+| **Keyboard Shortcuts** | N=capture, D=done, C=clarify, arrows=navigate |
+| **Notifications** | Reminders for tasks with deadlines, Web Notifications API |
+
+### Structural Features
+| Feature | Description |
+|---------|-------------|
+| **Dashboard Analytics** | Charts: tasks/day, estimated vs actual time, context/project distribution |
+| **Recurring Tasks** | Daily/weekly/monthly recurrence, auto-creates next occurrence on completion |
+| **Tags & Advanced Filters** | Free-form tags + combined filters (tag+status+project+priority) |
+| **Kanban View** | Columns: Next → In Progress → Waiting → Done with drag & drop |
+| **Data Export** | CSV, JSON, or Markdown export for tasks, notes, decision logs |
+
+### Advanced Features
+| Feature | Description |
+|---------|-------------|
+| **AI Proactive Insights** | Pattern detection: stale tasks, estimation accuracy, bottlenecks |
+| **Google Calendar** | Sync tasks with deadlines to Google Calendar (stub ready) |
+| **Voice Capture** | Web Speech API + AI splits spoken text into multiple inbox items |
 
 ---
 
 ## Data Flow
 
 ### Capture Flow
-1. User enters text in the Inbox quick capture field
+1. User enters text in Inbox quick capture (or voice capture)
 2. Frontend calls `POST /api/inbox/`
 3. Backend creates `InboxItem` with status `pending`
 4. Event system emits `captured` event
 5. Item appears in Inbox list
 
-### Clarification Flow (GTD)
-1. User clicks "Clarify" on a pending inbox item
-2. User selects type: task, project, note, or trash
-3. Frontend calls `POST /api/inbox/{id}/clarify`
-4. Backend creates the target entity (Task, Project, or Note)
-5. Updates InboxItem with `clarified_as` and `clarified_ref_id`
-6. Event system emits `clarified` event
+### AI Clarification Flow
+1. User clicks "AI Clarify" on a pending inbox item
+2. Frontend calls `POST /api/ai/classify` with item content
+3. OpenAI GPT classifies: task/project/note/idea/trash + metadata
+4. Suggestion displayed inline with confidence bar
+5. User can Apply (auto-clarify) or Edit (pre-filled modal)
+6. Frontend calls `POST /api/inbox/{id}/clarify`
+7. Event system emits `clarified` event
 
-### Task Completion Flow
-1. User clicks the Done button on a task
-2. Optionally enters actual time spent
-3. Frontend calls `POST /api/tasks/{id}/complete`
-4. Backend sets `status=done`, `completed_at=now()`
-5. Stores execution metadata (actual_time, context)
-6. Event system emits `completed` event with full metadata
+### Voice Capture Flow
+1. User speaks into microphone (Web Speech API)
+2. Transcribed text sent to `POST /api/voice/capture`
+3. AI splits text into multiple distinct items
+4. Each item created as separate inbox entry
+5. User reviews and clarifies each item
+
+### Task Completion Flow (with Recurring)
+1. User clicks Done on a task
+2. Frontend calls `POST /api/tasks/{id}/complete`
+3. Backend sets `status=done`, `completed_at=now()`
+4. If task has `recurrence_pattern`, creates next occurrence
+5. Event system emits `completed` event
 
 ---
 
 ## Database Schema
 
-### inbox_items
-Stores all captured inputs before clarification.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| id | UUID | Primary key |
-| content | TEXT | Raw captured content |
-| item_type | VARCHAR(50) | quick_note, task, idea, other |
-| status | ENUM | pending, processed, trashed |
-| clarified_as | VARCHAR(50) | task, project, note, trash |
-| clarified_ref_id | UUID | FK to created entity |
-| captured_at | TIMESTAMP | When captured |
-| processed_at | TIMESTAMP | When clarified |
-
-### tasks
-Core task management table.
-
+### tasks (updated)
 | Column | Type | Description |
 |--------|------|-------------|
 | id | UUID | Primary key |
 | title | VARCHAR(500) | Task title |
 | description | TEXT | Optional description |
-| status | ENUM | next, waiting, someday, done |
-| priority | ENUM | low, medium, high, critical |
+| status | VARCHAR(20) | next, in_progress, waiting, someday, done |
+| priority | VARCHAR(20) | low, medium, high, critical |
 | context | VARCHAR(100) | GTD context (@work, @home) |
 | project_id | UUID | FK to projects |
 | estimated_time | INT | Minutes (estimated) |
 | actual_time | INT | Minutes (actual) |
 | due_date | TIMESTAMP | Optional deadline |
+| tags | VARCHAR(1000) | Comma-separated tags |
+| recurrence_pattern | VARCHAR(20) | daily, weekly, monthly, null |
+| recurrence_parent_id | UUID | FK to parent task (for recurring) |
+| reminder_at | TIMESTAMP | When to send reminder |
 | created_at | TIMESTAMP | Creation time |
 | completed_at | TIMESTAMP | Completion time |
 | updated_at | TIMESTAMP | Last update |
 
-### projects
-Groups tasks into projects.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| id | UUID | Primary key |
-| name | VARCHAR(500) | Project name |
-| description | TEXT | Optional description |
-| status | ENUM | active, on_hold, completed, archived |
-| area | VARCHAR(200) | PARA area |
-| created_at | TIMESTAMP | Creation time |
-| updated_at | TIMESTAMP | Last update |
-
-### task_events
-Event sourcing table for all system actions.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| id | UUID | Primary key |
-| task_id | UUID | FK to tasks (nullable) |
-| event_type | ENUM | captured, clarified, scheduled, completed, reviewed, updated, created |
-| description | TEXT | Human-readable description |
-| metadata_json | TEXT | JSON with extra data |
-| created_at | TIMESTAMP | Event time |
-
-### decision_logs
-Thinking Engine metadata.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| id | UUID | Primary key |
-| title | VARCHAR(500) | Decision title |
-| log_type | ENUM | decision, risk_analysis, problem_breakdown |
-| context | TEXT | Situation context |
-| hypotheses | TEXT | Working hypotheses |
-| options | TEXT | Available options |
-| decision | TEXT | Chosen option |
-| expected_outcome | TEXT | What was expected |
-| actual_outcome | TEXT | What actually happened |
-| markdown_path | VARCHAR(1000) | Path to full Markdown doc |
-| tags | VARCHAR(500) | Comma-separated tags |
-
-### notes
-Knowledge System metadata (content in Markdown files).
-
-| Column | Type | Description |
-|--------|------|-------------|
-| id | UUID | Primary key |
-| title | VARCHAR(500) | Note title |
-| category | ENUM | project, area, resource, archive |
-| tags | VARCHAR(500) | Comma-separated tags |
-| markdown_path | VARCHAR(1000) | Path to Markdown file |
-| content | TEXT | Inline content (if no file) |
-| linked_note_ids | VARCHAR(2000) | Linked notes |
-
 ---
 
-## Event System
+## API Endpoints
 
-Every significant action generates an event stored in `task_events`. Events feed the Memory Palace and AI analysis layers.
+### Core
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | /api/inbox/ | Capture new item |
+| POST | /api/inbox/{id}/clarify | Clarify inbox item (GTD) |
+| GET | /api/tasks/ | List tasks (advanced filters) |
+| POST | /api/tasks/{id}/complete | Complete task |
+| GET | /api/tasks/reminders | Get upcoming reminders |
+| GET/POST | /api/projects/ | CRUD projects |
+| GET/POST | /api/notes/ | CRUD notes |
+| GET/POST | /api/decision-logs/ | CRUD decision logs |
+| GET | /api/reviews/weekly | Weekly review metrics |
 
-| Event Type | Trigger |
-|-----------|---------|
-| `captured` | New inbox item created |
-| `clarified` | Inbox item processed |
-| `created` | New task created directly |
-| `updated` | Task fields modified |
-| `scheduled` | Task assigned a due date |
-| `completed` | Task marked as done |
-| `reviewed` | Weekly review completed |
+### New Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | /api/search/ | Global search across all entities |
+| GET | /api/analytics/dashboard | Productivity metrics and charts |
+| GET | /api/export/{entity} | Export data as CSV/JSON/Markdown |
+| POST | /api/voice/capture | AI-powered voice text splitting |
+| GET | /api/insights/ | AI proactive insights |
 
----
-
-## AI Cognitive Layer
-
-The AI layer is designed with three levels, currently implemented as stubs ready for LLM integration.
-
-### Level 1 — Classification
-- Input categorization (task vs note vs project)
-- Suggest next actions
-- Reduce friction in GTD processing
-
-### Level 2 — Interpretation
-- Retrieve relevant past knowledge via Memory Palace
-- Connect current problem to past decisions
-- Provide contextual insights
-
-### Level 3 — Analysis
-- Detect patterns over time
-- Identify recurring errors
-- Compare expected vs actual outcomes
-- Suggest improvements
-
-### Rules
-- AI does not store data (PostgreSQL + Markdown do)
-- AI does not make final decisions
-- AI operates on demand or triggered events
+### AI Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | /api/ai/classify | L1: Classify inbox item |
+| POST | /api/ai/interpret | L2: Deep interpretation |
+| GET | /api/ai/patterns | L3: Pattern analysis |
+| POST | /api/ai/weekly-review | AI-generated weekly review |
+| GET | /api/ai/status | Check if AI is configured |
 
 ---
 
 ## Storage Philosophy
 
-> PostgreSQL stores what you do.
+> SQLite stores what you do.
 > Markdown stores what you think.
 > Memory Palace surfaces what matters.
 > AI helps you see what you would miss.
 
-The dual storage model ensures that structured data (tasks, events, metadata) lives in PostgreSQL for efficient querying, while knowledge content (notes, thinking documents) lives as portable Markdown files in the PARA structure.
+The dual storage model ensures that structured data (tasks, events, metadata) lives in SQLite for zero-config local operation, while knowledge content (notes, thinking documents) lives as portable Markdown files in the PARA structure.
+
+---
+
+## Deployment
+
+Charlie runs entirely locally without Docker:
+
+```bash
+bash start-local.sh    # Backend (8085) + Frontend (8080)
+python3 charlie-cli.py # CLI alternative
+```
+
+No external services required. OpenAI API key is optional for AI features.

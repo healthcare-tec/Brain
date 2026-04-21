@@ -20,7 +20,18 @@ async function request(path, options = {}) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || 'Request failed');
   }
+  // For export downloads, return blob
+  const ct = res.headers.get('content-type') || '';
+  if (ct.includes('text/csv') || ct.includes('text/markdown')) {
+    return { blob: await res.blob(), filename: _extractFilename(res) };
+  }
   return res.json();
+}
+
+function _extractFilename(res) {
+  const cd = res.headers.get('content-disposition') || '';
+  const match = cd.match(/filename=(.+)/);
+  return match ? match[1] : 'export';
 }
 
 // ── Inbox ───────────────────────────────────────────────────────────────
@@ -42,6 +53,9 @@ export const tasksApi = {
     if (params.status) qs.set('status', params.status);
     if (params.project_id) qs.set('project_id', params.project_id);
     if (params.context) qs.set('context', params.context);
+    if (params.tags) qs.set('tags', params.tags);
+    if (params.priority) qs.set('priority', params.priority);
+    if (params.search) qs.set('search', params.search);
     const q = qs.toString();
     return request(`/tasks/${q ? `?${q}` : ''}`);
   },
@@ -49,6 +63,7 @@ export const tasksApi = {
   update: (id, data) => request(`/tasks/${id}`, { method: 'PATCH', body: data }),
   complete: (id, data = {}) => request(`/tasks/${id}/complete`, { method: 'POST', body: data }),
   delete: (id) => request(`/tasks/${id}`, { method: 'DELETE' }),
+  reminders: () => request('/tasks/reminders'),
 };
 
 // ── Projects ────────────────────────────────────────────────────────────
@@ -103,38 +118,61 @@ export const eventsApi = {
 // ── AI ──────────────────────────────────────────────────────────────────
 
 export const aiApi = {
-  /** Check if AI is configured (returns { ai_enabled, models, message }) */
   status: () => request('/ai/status'),
-
-  /**
-   * L1 — Classify an inbox item.
-   * Returns { category, confidence, suggested_title, suggested_context,
-   *           suggested_priority, is_time_sensitive, estimated_minutes,
-   *           reasoning, ai_enabled }
-   */
   classify: (content, context = null) =>
-    request('/ai/classify', {
-      method: 'POST',
-      body: { content, context },
-    }),
-
-  /**
-   * L2 — Interpret content.
-   * interpret_type: "task" | "note" | "decision"
-   */
+    request('/ai/classify', { method: 'POST', body: { content, context } }),
   interpret: (content, interpret_type = 'task', extra_context = null) =>
-    request('/ai/interpret', {
-      method: 'POST',
-      body: { content, interpret_type, extra_context },
-    }),
-
-  /** L3 — Detect behavioral patterns */
+    request('/ai/interpret', { method: 'POST', body: { content, interpret_type, extra_context } }),
   patterns: (days = 30) => request(`/ai/patterns?timeframe_days=${days}`),
-
-  /** L3 — Generate weekly review narrative */
   weeklyReview: (reviewData = null) =>
-    request('/ai/weekly-review', {
-      method: 'POST',
-      body: { review_data: reviewData },
-    }),
+    request('/ai/weekly-review', { method: 'POST', body: { review_data: reviewData } }),
+};
+
+// ── Global Search ───────────────────────────────────────────────────────
+
+export const searchApi = {
+  search: (q, limit = 20) => request(`/search/?q=${encodeURIComponent(q)}&limit=${limit}`),
+};
+
+// ── Analytics Dashboard ─────────────────────────────────────────────────
+
+export const analyticsApi = {
+  summary: (days = 30) => request(`/analytics/summary?days=${days}`),
+  completionsByDay: (days = 30) => request(`/analytics/completions-by-day?days=${days}`),
+  byContext: () => request('/analytics/by-context'),
+  byProject: () => request('/analytics/by-project'),
+  timeEstimation: (days = 30) => request(`/analytics/time-estimation?days=${days}`),
+  eventsTimeline: (days = 7) => request(`/analytics/events-timeline?days=${days}`),
+};
+
+// ── Data Export ─────────────────────────────────────────────────────────
+
+export const exportApi = {
+  tasks: (format = 'json') => request(`/export/tasks?format=${format}`),
+  notes: (format = 'json') => request(`/export/notes?format=${format}`),
+  decisionLogs: (format = 'json') => request(`/export/decision_logs?format=${format}`),
+  download: async (entityType, format) => {
+    const result = await request(`/export/${entityType}?format=${format}`);
+    if (result && result.blob) {
+      const url = URL.createObjectURL(result.blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = result.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+    return result;
+  },
+};
+
+// ── Voice Capture ───────────────────────────────────────────────────────
+
+export const voiceApi = {
+  capture: (text) => request('/voice/capture', { method: 'POST', body: { text } }),
+};
+
+// ── AI Proactive Insights ───────────────────────────────────────────────
+
+export const insightsApi = {
+  get: () => request('/insights/'),
 };

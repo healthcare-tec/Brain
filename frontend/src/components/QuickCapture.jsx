@@ -9,19 +9,11 @@ export default function QuickCapture({ onCapture, placeholder = 'Capture anythin
     e.preventDefault();
     if (!content.trim()) return;
     setLoading(true);
-    try {
-      await onCapture(content.trim());
-      setContent('');
-    } finally {
-      setLoading(false);
-    }
+    try { await onCapture(content.trim()); setContent(''); } finally { setLoading(false); }
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit(e);
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(e); }
   };
 
   return (
@@ -35,7 +27,7 @@ export default function QuickCapture({ onCapture, placeholder = 'Capture anythin
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           autoFocus={autoFocus}
-          className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-charlie-300 focus:border-charlie-400 transition-shadow"
+          className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-charlie-300 focus:border-charlie-400 transition-shadow placeholder-gray-400 dark:placeholder-gray-500"
           disabled={loading}
         />
       </div>

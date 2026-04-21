@@ -1,6 +1,8 @@
 """
 Task System — Task model.
 Supports GTD statuses: next, waiting, someday, done.
+Recurring tasks: daily, weekly, monthly, custom.
+Tags: comma-separated free-form tags.
 Uses String columns for enum values (SQLite-compatible).
 """
 
@@ -18,6 +20,7 @@ class TaskStatus(str, enum.Enum):
     NEXT = "next"
     WAITING = "waiting"
     SOMEDAY = "someday"
+    IN_PROGRESS = "in_progress"
     DONE = "done"
 
 
@@ -26,6 +29,14 @@ class TaskPriority(str, enum.Enum):
     MEDIUM = "medium"
     HIGH = "high"
     CRITICAL = "critical"
+
+
+class RecurrenceType(str, enum.Enum):
+    NONE = "none"
+    DAILY = "daily"
+    WEEKLY = "weekly"
+    MONTHLY = "monthly"
+    CUSTOM = "custom"
 
 
 class Task(Base):
@@ -45,6 +56,9 @@ class Task(Base):
     context: Mapped[str | None] = mapped_column(
         String(100), nullable=True, comment="@home, @work, @computer, etc."
     )
+    tags: Mapped[str | None] = mapped_column(
+        String(1000), nullable=True, comment="Comma-separated free-form tags"
+    )
     project_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
     )
@@ -55,6 +69,23 @@ class Task(Base):
         Integer, nullable=True, comment="Actual time in minutes"
     )
     due_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    # Recurring task fields
+    recurrence: Mapped[str] = mapped_column(
+        String(20), default=RecurrenceType.NONE.value, nullable=False
+    )
+    recurrence_interval: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, comment="Custom interval in days"
+    )
+    parent_task_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, comment="ID of the original recurring task"
+    )
+
+    # Reminder
+    reminder_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True, comment="When to send a reminder"
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )

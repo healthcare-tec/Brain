@@ -1,12 +1,9 @@
-"""
-Task System + Task Completion System API endpoints.
-"""
+"""Tasks API router with advanced filters, reminders, tags."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.task import TaskStatus
 from app.schemas.task import TaskCreate, TaskUpdate, TaskComplete, TaskResponse
 from app.services import task_service
 
@@ -21,13 +18,25 @@ async def create_task(data: TaskCreate, db: AsyncSession = Depends(get_db)):
 
 @router.get("/", response_model=list[TaskResponse])
 async def list_tasks(
-    status: TaskStatus | None = Query(None),
+    status: str | None = Query(None),
     project_id: str | None = Query(None),
     context: str | None = Query(None),
+    tags: str | None = Query(None, description="Comma-separated tags"),
+    priority: str | None = Query(None),
+    search: str | None = Query(None, description="Search title, description, tags"),
     db: AsyncSession = Depends(get_db),
 ):
-    """List tasks with optional filters (status, project, context)."""
-    return await task_service.list_tasks(db, status, project_id, context)
+    """List tasks with optional filters."""
+    return await task_service.list_tasks(
+        db, status=status, project_id=project_id, context=context,
+        tags=tags, priority=priority, search=search,
+    )
+
+
+@router.get("/reminders", response_model=list[TaskResponse])
+async def get_reminders(db: AsyncSession = Depends(get_db)):
+    """Get tasks with due or overdue reminders."""
+    return await task_service.get_reminders(db)
 
 
 @router.get("/{task_id}", response_model=TaskResponse)
@@ -54,7 +63,7 @@ async def update_task(
 async def complete_task(
     task_id: str, data: TaskComplete, db: AsyncSession = Depends(get_db)
 ):
-    """Mark a task as DONE with execution metadata."""
+    """Mark a task as DONE. If recurring, auto-creates next occurrence."""
     task = await task_service.complete_task(db, task_id, data)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
