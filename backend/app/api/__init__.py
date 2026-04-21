@@ -17,6 +17,7 @@ from app.api.analytics import router as analytics_router
 from app.api.export import router as export_router
 from app.api.voice import router as voice_router
 from app.api.insights import router as insights_router
+from app.api.debug_env import router as debug_env_router
 
 api_router = APIRouter(prefix="/api")
 
@@ -33,3 +34,4 @@ api_router.include_router(analytics_router, prefix="/analytics", tags=["Analytic
 api_router.include_router(export_router, prefix="/export", tags=["Data Export"])
 api_router.include_router(voice_router, prefix="/voice", tags=["Voice Capture"])
 api_router.include_router(insights_router, prefix="/insights", tags=["AI Proactive Insights"])
+api_router.include_router(debug_env_router, prefix="/debug", tags=["Debug (Temporary)"])

@@ -346,6 +346,24 @@ start_services() {
         export DATABASE_URL="sqlite+aiosqlite:///${DB_FILE}"
         export DATABASE_URL_SYNC="sqlite:///${DB_FILE}"
         export KNOWLEDGE_BASE_PATH="$SCRIPT_DIR/knowledge"
+
+        # ── Extra safety: explicitly extract OPENAI_API_KEY from .env and export it
+        # This handles cases where `source` fails silently (e.g. lines with `export KEY=val`)
+        if [ -z "${OPENAI_API_KEY:-}" ] && [ -f "${SCRIPT_DIR}/.env" ]; then
+            _RAW_KEY=$(grep -E '^[[:space:]]*OPENAI_API_KEY[[:space:]]*=' "${SCRIPT_DIR}/.env" \
+                | head -1 | sed 's/^[^=]*=//;s/^[[:space:]]*//;s/[[:space:]]*$//;s/^"//;s/"$//;s/^'\''/;s/'\''//')
+            if [ -n "$_RAW_KEY" ]; then
+                export OPENAI_API_KEY="$_RAW_KEY"
+                ok "OPENAI_API_KEY extracted directly from Brain/.env (fallback method)"
+            fi
+        fi
+        if [ -n "${OPENAI_API_KEY:-}" ]; then
+            ok "OPENAI_API_KEY is set (${#OPENAI_API_KEY} chars) — AI features enabled"
+        else
+            warn "OPENAI_API_KEY not found — AI features will be disabled"
+            warn "Add OPENAI_API_KEY=sk-... to ${SCRIPT_DIR}/.env to enable AI"
+        fi
+
         nohup $UVICORN_CMD app.main:app \
             --host 0.0.0.0 \
             --port "$BACKEND_PORT" \

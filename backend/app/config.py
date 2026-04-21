@@ -3,45 +3,46 @@ Charlie — Cognitive Operating System
 Configuration module.
 
 The .env file is expected at the PROJECT ROOT (Brain/.env).
-Resolution is done via __file__ so it works regardless of the
-working directory from which uvicorn is launched.
 
-Load order:
-  1. Brain/.env  (project root — loaded explicitly with python-dotenv)
-  2. Brain/backend/.env  (legacy fallback)
-  3. Environment variables already set in the shell (override .env values)
-  4. Built-in defaults
+Load order (first found wins):
+  1. /Brain/.env                   — absolute path (proot-distro / Docker)
+  2. <project_root>/.env           — resolved via __file__ (portable)
+  3. Brain/backend/.env            — legacy fallback
+  4. Environment variables already in os.environ (always respected)
 """
 
 import os
 from pathlib import Path
 
-# ── Path resolution (absolute, independent of CWD) ───────────────────────────
-# config.py lives at:  Brain/backend/app/config.py
-#   → parent           Brain/backend/app/
-#   → parent.parent    Brain/backend/
-#   → parent * 3       Brain/  (project root)
-_APP_DIR      = Path(__file__).resolve().parent          # Brain/backend/app/
-_BACKEND_DIR  = _APP_DIR.parent                          # Brain/backend/
-_PROJECT_ROOT = _BACKEND_DIR.parent                      # Brain/
+# ── Candidate .env paths ──────────────────────────────────────────────────────
+# config.py lives at:  <project>/backend/app/config.py
+_APP_DIR      = Path(__file__).resolve().parent          # backend/app/
+_BACKEND_DIR  = _APP_DIR.parent                          # backend/
+_PROJECT_ROOT = _BACKEND_DIR.parent                      # project root (Brain/)
 
-_ENV_ROOT    = _PROJECT_ROOT / ".env"
-_ENV_BACKEND = _BACKEND_DIR  / ".env"
+_ENV_CANDIDATES = [
+    Path("/Brain/.env"),                    # absolute — proot-distro / Docker
+    _PROJECT_ROOT / ".env",                 # relative to __file__
+    _BACKEND_DIR  / ".env",                 # legacy backend/.env
+]
 
-# ── Explicitly load .env with python-dotenv BEFORE pydantic-settings ─────────
-# This ensures the values are in os.environ when Settings() is instantiated,
-# regardless of the working directory or how uvicorn was launched.
+# ── Load .env with python-dotenv BEFORE pydantic-settings ────────────────────
+# We load ALL candidate files (override=False so the first found wins and
+# existing os.environ values are never overwritten).
 try:
-    from dotenv import load_dotenv  # python-dotenv
-    if _ENV_ROOT.exists():
-        load_dotenv(dotenv_path=str(_ENV_ROOT), override=False)
-    elif _ENV_BACKEND.exists():
-        load_dotenv(dotenv_path=str(_ENV_BACKEND), override=False)
-except ImportError:
-    # python-dotenv not installed — fall back to pydantic-settings env_file
-    pass
+    from dotenv import load_dotenv, dotenv_values
 
-# ── Pydantic-settings (reads from os.environ, which now includes .env) ───────
+    _loaded_env_path: str | None = None
+    for _candidate in _ENV_CANDIDATES:
+        if _candidate.exists():
+            load_dotenv(dotenv_path=str(_candidate), override=False)
+            _loaded_env_path = str(_candidate)
+            break  # stop at first found
+
+except ImportError:
+    _loaded_env_path = None  # python-dotenv not installed; rely on pydantic-settings
+
+# ── Pydantic-settings ─────────────────────────────────────────────────────────
 from pydantic_settings import BaseSettings  # noqa: E402
 
 # ── Default SQLite paths ──────────────────────────────────────────────────────
@@ -75,7 +76,7 @@ class Settings(BaseSettings):
     # Model used for each cognitive level
     AI_MODEL_L1: str = "gpt-4.1-nano"   # L1 Classification (fast, cheap)
     AI_MODEL_L2: str = "gpt-4.1-mini"   # L2 Interpretation
-    AI_MODEL_L3: str = "gpt-4.1-mini"   # L3 Analysis (gpt-4o not available in this env)
+    AI_MODEL_L3: str = "gpt-4.1-mini"   # L3 Analysis
 
     # Maximum tokens per AI response
     AI_MAX_TOKENS_L1: int = 256
@@ -93,14 +94,15 @@ class Settings(BaseSettings):
     @property
     def ai_enabled(self) -> bool:
         """Returns True if an OpenAI API key is configured."""
-        key = self.OPENAI_API_KEY or ""
-        # Accept both sk- (OpenAI) and any non-empty key (proxied endpoints)
+        key = (self.OPENAI_API_KEY or "").strip()
         return bool(key and len(key) > 8)
 
     class Config:
-        # pydantic-settings will also read from env_file as a secondary source
-        # Primary loading is done above via python-dotenv / load_dotenv()
-        env_file = str(_ENV_ROOT) if _ENV_ROOT.exists() else str(_ENV_BACKEND)
+        # pydantic-settings secondary source: first existing candidate
+        env_file = next(
+            (str(p) for p in _ENV_CANDIDATES if p.exists()),
+            str(_ENV_CANDIDATES[1]),  # default to project root path
+        )
         env_file_encoding = "utf-8"
         extra = "allow"
 
