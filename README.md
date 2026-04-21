@@ -1,6 +1,6 @@
-# Charlie — Cognitive Operating System
+# 🧠 Charlie — Cognitive Operating System
 
-Charlie is a personal **Cognitive Operating System** designed to capture inputs instantly, organize execution (GTD), structure knowledge (Second Brain / PARA), support deep thinking (System 2), learn from past decisions (Memory Palace), and amplify cognition using AI.
+Charlie is a personal **Cognitive Operating System** — a stand-alone system designed to capture inputs instantly, organize execution (GTD), structure knowledge (Second Brain / PARA), support deep thinking (System 2), and build a feedback loop over time.
 
 Charlie is not a task manager. It is a system for **thinking, deciding, and improving over time**.
 
@@ -11,11 +11,11 @@ Charlie is not a task manager. It is a system for **thinking, deciding, and impr
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
 | **Backend** | FastAPI + Python 3.11 | REST API, business logic, event system |
-| **Database** | PostgreSQL 16 | Tasks, projects, events, decision logs, note metadata |
+| **Database** | PostgreSQL | Tasks, projects, events, decision logs, note metadata |
 | **Knowledge** | Markdown filesystem (PARA) | Notes, thinking documents, knowledge base |
-| **Frontend** | React 18 + Tailwind CSS | Complete UI for all modules |
-| **Infrastructure** | Docker Compose | Stand-alone deployment |
+| **Frontend** | React 18 + Tailwind CSS | Full web UI for all modules |
 | **Migrations** | Alembic | Database schema versioning |
+| **CLI** | Python (built-in) | Terminal interface — all modules, no browser needed |
 
 ---
 
@@ -53,180 +53,71 @@ Weekly review dashboard with metrics: pending inbox, completed tasks, next actio
 ## Quick Start
 
 ### Prerequisites
-- [Docker](https://docs.docker.com/get-docker/) 20.10+
-- Docker Compose (V1 `docker-compose` **or** V2 plugin `docker compose`)
 
-### 1. Install Docker Compose (if not present)
+- Python 3.9+
+- Node.js 18+
+- PostgreSQL 14+
 
-> **Known issue:** `docker-compose 1.29.2` (Python-based, V1) **breaks on Python 3.12** with
-> `ModuleNotFoundError: No module named 'distutils'`.
-> The fix is to install **Docker Compose V2** (pure Go binary, no Python dependency).
+> On Ubuntu/Debian, install all prerequisites with:
+> ```bash
+> apt-get update && apt-get install -y python3 python3-pip python3-venv nodejs npm postgresql postgresql-contrib
+> ```
 
-**Recommended fix — run the bundled installer:**
-
-```bash
-bash install-compose.sh
-```
-
-Or manually:
+### Start Charlie (first run)
 
 ```bash
-# Step 1: download the V2 binary
-ARCH=$(uname -m)   # x86_64 or aarch64
-VERSION=v2.27.1
-sudo mkdir -p /usr/local/lib/docker/cli-plugins
-sudo curl -fsSL \
-  "https://github.com/docker/compose/releases/download/${VERSION}/docker-compose-linux-${ARCH}" \
-  -o /usr/local/lib/docker/cli-plugins/docker-compose
-sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
-
-# Step 2: verify
-docker compose version
-# Docker Compose version v2.27.1
-```
-
-> After this, `docker compose` (with space, V2) works correctly.
-> The old `docker-compose` (with hyphen, V1) can be left installed — it will be ignored.
-
-### 2. Start the system
-
-```bash
-# Clone the repository
 git clone https://github.com/healthcare-tec/Brain.git
 cd Brain
 
-# Option A — use the bundled start script (auto-detects V1 or V2)
-bash start.sh
-
-# Option B — Docker Compose V2 (plugin)
-docker compose up --build
-
-# Option C — Docker Compose V1 (standalone)
-docker-compose up --build
-```
-
-The system will be available at:
-- **Frontend:** http://localhost:8080
-- **Backend API:** http://localhost:8085
-- **Swagger UI:** http://localhost:8085/docs
-
-### 3. Other commands via start.sh
-
-```bash
-bash start.sh up        # Start (default)
-bash start.sh down      # Stop all services
-bash start.sh restart   # Rebuild and restart
-bash start.sh logs      # Follow logs
-bash start.sh migrate   # Run Alembic migrations
-bash start.sh test      # Run backend tests
-```
-
-### Production Mode
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
-# or
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
-
-# Frontend: http://localhost:8080
-# Backend API: http://localhost:8085
-```
-
-### Run Migrations Manually
-
-```bash
-# V2
-docker compose exec backend alembic upgrade head
-# V1
-docker-compose exec backend alembic upgrade head
-```
-
-### Run Tests
-
-```bash
-# Inside container
-bash start.sh test
-
-# Or locally
-cd backend
-pip install -r requirements.txt
-pytest tests/ -v
-```
-
----
-
-## Local Mode (No Docker)
-
-For environments where Docker is not available (containers, proot-distro, LXC, JupyterHub), Charlie can run directly on the host.
-
-### Quick start — local mode
-
-```bash
-# First run: installs all dependencies and configures the database
+# First run: installs deps, configures database, starts everything
 bash start-local.sh
+```
 
-# Subsequent runs
+The script will:
+1. Create a Python virtual environment in `backend/.venv`
+2. Install all Python dependencies
+3. Start PostgreSQL and create the `charlie` database
+4. Run Alembic migrations
+5. Install frontend dependencies
+6. Start backend on **port 8085** and frontend on **port 8080** in background
+
+**Access the system:**
+- Frontend UI → http://localhost:8080
+- Backend API → http://localhost:8085
+- Swagger UI  → http://localhost:8085/docs
+
+### Subsequent runs
+
+```bash
 bash start-local.sh start
 ```
 
-The script automatically:
-1. Installs Python 3, Node.js, and PostgreSQL if missing
-2. Creates a Python virtual environment in `backend/.venv`
-3. Creates the `charlie` database and user in PostgreSQL
-4. Runs Alembic migrations
-5. Installs frontend dependencies
-6. Starts backend (port 8085) and frontend (port 8080) in background
-
-### Local mode commands
+### All commands
 
 ```bash
-bash start-local.sh start    # Start all services (default)
+bash start-local.sh start    # Start all services
 bash start-local.sh stop     # Stop all services
 bash start-local.sh restart  # Restart all services
 bash start-local.sh status   # Show running status
 bash start-local.sh logs     # Follow backend logs
 bash start-local.sh logs frontend  # Follow frontend logs
-bash start-local.sh migrate  # Run Alembic migrations
-```
-
-### Manual backend-only start
-
-If you only need the API (e.g. to use the CLI):
-
-```bash
-cd backend
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-
-# Set environment variables
-export DATABASE_URL="postgresql+asyncpg://charlie:charlie@localhost:5432/charlie"
-export DATABASE_URL_SYNC="postgresql://charlie:charlie@localhost:5432/charlie"
-export KNOWLEDGE_BASE_PATH="../knowledge"
-
-# Run migrations
-alembic upgrade head
-
-# Start server
-uvicorn app.main:app --host 0.0.0.0 --port 8085 --reload
+bash start-local.sh migrate  # Run Alembic migrations manually
 ```
 
 ---
 
 ## CLI Mode
 
-Charlie includes a full interactive command-line interface that covers all modules. Use it when the frontend is not accessible or when you prefer terminal interaction.
+Charlie includes a full interactive command-line interface that covers all modules. Use it when the browser is not available or when you prefer terminal interaction.
 
 ### Start the CLI
 
 ```bash
-# Requires the backend to be running
+# Backend must be running first
+bash start-local.sh start
+
+# Then launch the CLI
 python3 charlie-cli.py
-
-# Connect to a custom backend URL
-python3 charlie-cli.py --api http://localhost:8085
-
-# Check connectivity only
-python3 charlie-cli.py --check
 ```
 
 ### CLI modules
@@ -234,11 +125,11 @@ python3 charlie-cli.py --check
 | Module | Description |
 |--------|-------------|
 | **Quick Capture** | Instantly add anything to inbox (frictionless) |
-| **Inbox** | Process inbox with GTD clarification (task/project/note/trash) |
+| **Inbox** | Process inbox with GTD clarification (task / project / note / trash) |
 | **Tasks** | View next actions, add tasks, mark as DONE with metadata |
 | **Projects** | Create and manage projects, view tasks per project |
 | **Thinking** | Create Decision Logs, Risk Analysis, Problem Breakdowns |
-| **Knowledge** | Create and browse PARA notes (projects/areas/resources/archive) |
+| **Knowledge** | Create and browse PARA notes (projects / areas / resources / archive) |
 | **Weekly Review** | Metrics dashboard + interactive review checklist |
 
 ### Typical workflow
@@ -252,19 +143,67 @@ python3 charlie-cli.py --check
 
 ---
 
+## Manual Setup (step by step)
+
+If you prefer to set up each component manually:
+
+### 1. PostgreSQL
+
+```bash
+# Start PostgreSQL
+service postgresql start   # or: pg_ctlcluster <version> main start
+
+# Create database and user
+psql -U postgres -c "CREATE USER charlie WITH PASSWORD 'charlie';"
+psql -U postgres -c "CREATE DATABASE charlie OWNER charlie;"
+```
+
+### 2. Backend
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# Environment variables
+export DATABASE_URL="postgresql+asyncpg://charlie:charlie@localhost:5432/charlie"
+export DATABASE_URL_SYNC="postgresql://charlie:charlie@localhost:5432/charlie"
+export KNOWLEDGE_BASE_PATH="../knowledge"
+
+# Run migrations
+alembic upgrade head
+
+# Start server
+uvicorn app.main:app --host 0.0.0.0 --port 8085 --reload
+```
+
+### 3. Frontend
+
+```bash
+cd frontend
+npm install        # or: pnpm install
+npm run dev -- --host 0.0.0.0 --port 8080
+```
+
+### 4. Run tests
+
+```bash
+cd backend
+source .venv/bin/activate
+pytest tests/ -v
+```
+
+---
+
 ## Project Structure
 
 ```
 Brain/
 ├── README.md                    # This file
-├── docker-compose.yml           # Docker development environment
-├── docker-compose.prod.yml      # Docker production override
-├── start.sh                     # Docker startup script (auto-detects V1/V2)
-├── start-local.sh               # Local startup script (no Docker)
-├── install-compose.sh           # Docker Compose V2 installer
+├── start-local.sh               # Local startup script
 ├── charlie-cli.py               # Interactive CLI (all modules)
 ├── backend/
-│   ├── Dockerfile
 │   ├── requirements.txt
 │   ├── alembic.ini
 │   ├── alembic/
@@ -272,7 +211,6 @@ Brain/
 │   │   ├── script.py.mako
 │   │   └── versions/
 │   │       └── 001_initial_schema.py
-│   ├── start.sh
 │   ├── app/
 │   │   ├── main.py              # FastAPI application
 │   │   ├── config.py            # Settings (env vars)
@@ -301,8 +239,6 @@ Brain/
 │       ├── conftest.py          # Test config (SQLite in-memory)
 │       └── test_api.py          # API endpoint tests
 ├── frontend/
-│   ├── Dockerfile
-│   ├── nginx.conf               # Production nginx config
 │   ├── package.json
 │   ├── vite.config.js
 │   ├── tailwind.config.js
@@ -326,7 +262,7 @@ Brain/
 │       │   └── ReviewPage.jsx   # Weekly Review
 │       └── services/
 │           └── api.js           # API client
-├── knowledge/                   # PARA structure (Markdown)
+├── knowledge/                   # PARA structure (Markdown files)
 │   ├── projects/
 │   ├── areas/
 │   ├── resources/
@@ -379,30 +315,3 @@ Full interactive API documentation is available at `http://localhost:8085/docs` 
 >
 > The goal is not automation.
 > **The goal is better thinking.**
-
----
-
-## Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DATABASE_URL` | `postgresql+asyncpg://charlie:charlie@db:5432/charlie` | Async database URL |
-| `DATABASE_URL_SYNC` | `postgresql://charlie:charlie@db:5432/charlie` | Sync database URL (Alembic) |
-| `KNOWLEDGE_BASE_PATH` | `/app/knowledge` | Path to PARA Markdown files |
-| `DEBUG` | `false` | Enable debug mode |
-
----
-
-## Development Roadmap
-
-- **Phase 1** (implemented): Capture Engine, Task System, Done System, Project Management
-- **Phase 2** (implemented): Notes (PARA), Thinking Engine, Decision Logs
-- **Phase 3** (stubs): Memory Palace integration, AI Classification
-- **Phase 4** (stubs): AI Interpretation, Pattern Detection
-- **Future**: WhatsApp capture, email ingestion, calendar sync, local LLM integration
-
----
-
-## License
-
-See [LICENSE](LICENSE) for details.
