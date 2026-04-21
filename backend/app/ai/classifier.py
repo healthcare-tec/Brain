@@ -55,8 +55,8 @@ Response schema (JSON only):
 }"""
 
 
-def _stub_classify(content: str) -> dict:
-    """Heuristic fallback when AI is not configured."""
+def _stub_classify(content: str, reason: str = "AI not configured") -> dict:
+    """Heuristic fallback when AI is not configured or unavailable."""
     content_lower = content.lower()
 
     if any(w in content_lower for w in [
@@ -87,7 +87,7 @@ def _stub_classify(content: str) -> dict:
         "suggested_priority": priority,
         "is_time_sensitive": False,
         "estimated_minutes": None,
-        "reasoning": "Heuristic classification (AI not configured — add OPENAI_API_KEY to .env (project root))",
+        "reasoning": f"Heuristic classification ({reason})",
         "ai_enabled": False,
     }
 
@@ -102,7 +102,7 @@ async def classify_input(content: str, context: Optional[str] = None) -> dict:
 
     if not ai_enabled:
         logger.debug("AI not configured — using heuristic classification")
-        return _stub_classify(content)
+        return _stub_classify(content, reason="add OPENAI_API_KEY to .env (project root)")
 
     try:
         from openai import AsyncOpenAI
@@ -150,9 +150,13 @@ async def classify_input(content: str, context: Optional[str] = None) -> dict:
 
     except ImportError:
         logger.warning("openai package not installed — using heuristic classification")
-        return _stub_classify(content)
+        return _stub_classify(content, reason="openai package not installed")
     except Exception as exc:
-        logger.error("AI classification failed: %s", exc)
-        result = _stub_classify(content)
-        result["error"] = str(exc)
+        # Key is configured but the API call failed — return heuristic result
+        # but with ai_enabled=True and the real error message so the frontend
+        # can show the actual problem instead of 'not configured'
+        logger.error("AI classification failed (key is set, API call failed): %s", exc)
+        result = _stub_classify(content, reason=f"API call failed: {str(exc)[:120]}")
+        result["ai_enabled"] = True   # key IS configured — error is in the call
+        result["ai_error"] = str(exc)
         return result

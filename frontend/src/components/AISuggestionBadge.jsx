@@ -58,6 +58,24 @@ export default function AISuggestionBadge({ suggestion, loading, onApply, onEdit
     );
   }
 
+  // Case: API key is configured but the OpenAI call failed (network, model, quota, etc.)
+  if (suggestion.ai_enabled === true && suggestion.ai_error) {
+    return (
+      <div className="mt-2 px-3 py-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg text-xs">
+        <div className="flex items-start gap-2">
+          <AlertCircle className="w-3.5 h-3.5 text-orange-500 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-medium text-orange-700 dark:text-orange-400">Erro na chamada à OpenAI</p>
+            <p className="text-orange-600 dark:text-orange-500 mt-0.5 break-all">{suggestion.ai_error}</p>
+            <p className="text-orange-500 dark:text-orange-600 mt-1">Sugestão heurística: <strong>{suggestion.category}</strong></p>
+          </div>
+          <button onClick={onDismiss} className="text-orange-400 hover:text-orange-600 flex-shrink-0"><X className="w-3.5 h-3.5" /></button>
+        </div>
+      </div>
+    );
+  }
+
+  // Case: AI key not configured at all
   if (suggestion.ai_enabled === false && suggestion.reasoning?.includes('OPENAI_API_KEY')) {
     return (
       <div className="mt-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-xs">
