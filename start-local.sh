@@ -271,12 +271,11 @@ setup_backend() {
     ok "Backend dependencies installed."
 
     # Write .env (SQLite — no server needed)
-    cat > .env << EOF
-DATABASE_URL=sqlite+aiosqlite:///${DB_FILE}
-DATABASE_URL_SYNC=sqlite:///${DB_FILE}
-KNOWLEDGE_BASE_PATH=${SCRIPT_DIR}/knowledge
-DEBUG=false
-EOF
+    # Use printf to avoid heredoc variable expansion issues with paths
+    printf 'DATABASE_URL=sqlite+aiosqlite://%s\n' "/${DB_FILE}" > .env
+    printf 'DATABASE_URL_SYNC=sqlite:///%s\n' "${DB_FILE}" >> .env
+    printf 'KNOWLEDGE_BASE_PATH=%s\n' "${SCRIPT_DIR}/knowledge" >> .env
+    printf 'DEBUG=false\n' >> .env
     ok ".env file created (SQLite: $DB_FILE)"
 
     # Run Alembic migrations
@@ -325,6 +324,8 @@ start_services() {
         local UVICORN_CMD="uvicorn"
         if [ "$CHARLIE_VENV_MODE" = "create" ] && [ -f "$BACKEND_DIR/.venv/bin/uvicorn" ]; then
             UVICORN_CMD="$BACKEND_DIR/.venv/bin/uvicorn"
+        elif [ "$CHARLIE_VENV_MODE" = "existing" ] && [ -n "$VIRTUAL_ENV" ] && [ -f "$VIRTUAL_ENV/bin/uvicorn" ]; then
+            UVICORN_CMD="$VIRTUAL_ENV/bin/uvicorn"
         fi
 
         DATABASE_URL="sqlite+aiosqlite:///${DB_FILE}" \
@@ -347,11 +348,12 @@ start_services() {
     else
         info "Starting frontend on port $FRONTEND_PORT..."
         cd "$FRONTEND_DIR"
+        # Use 127.0.0.1 (not 0.0.0.0) to avoid proot-distro uv_interface_addresses error
         if command -v pnpm &>/dev/null; then
-            nohup pnpm dev --host 0.0.0.0 --port "$FRONTEND_PORT" \
+            nohup pnpm dev --host 127.0.0.1 --port "$FRONTEND_PORT" \
                 > "$LOG_DIR/frontend.log" 2>&1 &
         else
-            nohup npm run dev -- --host 0.0.0.0 --port "$FRONTEND_PORT" \
+            nohup npm run dev -- --host 127.0.0.1 --port "$FRONTEND_PORT" \
                 > "$LOG_DIR/frontend.log" 2>&1 &
         fi
         echo $! > "$PID_DIR/frontend.pid"
