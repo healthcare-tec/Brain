@@ -7,7 +7,7 @@ Extracts next actions, dependencies, risks, and context.
 Balanced model, moderate temperature.
 
 Supports two AI providers (configured via AI_PROVIDER in .env):
-  - ollama  (default) — local Ollama instance, e.g. gemma3:27b
+  - ollama  (default) — local Ollama instance, e.g. gemma3:270m
   - openai            — OpenAI API, e.g. gpt-4o-mini
 
 Falls back to structured stub response if AI is unavailable.

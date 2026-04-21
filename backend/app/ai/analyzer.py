@@ -8,7 +8,7 @@ from aggregated task events, completion data, and decision logs.
 Most capable model, higher temperature for creative synthesis.
 
 Supports two AI providers (configured via AI_PROVIDER in .env):
-  - ollama  (default) — local Ollama instance, e.g. gemma3:27b
+  - ollama  (default) — local Ollama instance, e.g. gemma3:270m
   - openai            — OpenAI API, e.g. gpt-4o
 
 Returns structured stub response if AI is unavailable.

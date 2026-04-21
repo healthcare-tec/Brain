@@ -6,7 +6,7 @@ Classifies raw input into actionable categories.
 Fast, low-cost, deterministic (temperature=0.1).
 
 Supports two AI providers (configured via AI_PROVIDER in .env):
-  - ollama  (default) — local Ollama instance, e.g. gemma3:27b
+  - ollama  (default) — local Ollama instance, e.g. gemma3:270m
   - openai            — OpenAI API, e.g. gpt-4o-mini
 
 Falls back to heuristic classification if AI is unavailable.

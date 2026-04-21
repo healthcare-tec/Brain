@@ -83,12 +83,15 @@ class Settings(BaseSettings):
     # ── Ollama configuration ─────────────────────────────────────────────────
     # Ollama exposes an OpenAI-compatible API at /v1
     OLLAMA_BASE_URL: str = "http://localhost:11434/v1"
-    OLLAMA_MODEL:    str = "gemma3:27b"   # default model for all levels
+    # OLLAMA_MODEL has NO hardcoded default — must be set in .env.
+    # get_ai_client_params() reads os.environ directly to avoid pydantic
+    # Settings being frozen at import time before .env is fully loaded.
+    OLLAMA_MODEL:    str = ""
 
     # Per-level Ollama model overrides (fall back to OLLAMA_MODEL if empty)
     OLLAMA_MODEL_L1: str = ""   # e.g. "gemma3:4b" for faster classification
-    OLLAMA_MODEL_L2: str = ""   # e.g. "gemma3:27b" for interpretation
-    OLLAMA_MODEL_L3: str = ""   # e.g. "gemma3:27b" for analysis
+    OLLAMA_MODEL_L2: str = ""   # e.g. "gemma3:270m" for interpretation
+    OLLAMA_MODEL_L3: str = ""   # e.g. "gemma3:270m" for analysis
 
     # ── OpenAI configuration ─────────────────────────────────────────────────
     # Add your API key to Brain/.env (never commit — it's in .gitignore)
@@ -146,12 +149,21 @@ def get_ai_client_params(level: str = "L1") -> dict:
 
     level: "L1" | "L2" | "L3"
 
+    IMPORTANT: All values are read from os.environ FIRST to avoid the pydantic
+    Settings being frozen at import time before load_dotenv has run.
+    Settings values are used only as a last resort.
+
     Usage:
         params = get_ai_client_params("L1")
         client = AsyncOpenAI(api_key=params["api_key"], base_url=params["base_url"])
         response = await client.chat.completions.create(model=params["model"], ...)
     """
-    provider = (os.environ.get("AI_PROVIDER") or settings.AI_PROVIDER).lower().strip()
+    # Always read AI_PROVIDER from os.environ first (never from frozen Settings)
+    provider = (
+        os.environ.get("AI_PROVIDER")
+        or settings.AI_PROVIDER
+        or "ollama"
+    ).lower().strip()
 
     if provider == "ollama":
         base_url = (
@@ -159,11 +171,25 @@ def get_ai_client_params(level: str = "L1") -> dict:
             or settings.OLLAMA_BASE_URL
             or "http://localhost:11434/v1"
         )
-        # Per-level model: env var OLLAMA_MODEL_L1 / L2 / L3 → OLLAMA_MODEL fallback
-        level_env = os.environ.get(f"OLLAMA_MODEL_{level}")
-        level_setting = getattr(settings, f"OLLAMA_MODEL_{level}", "")
-        default_model = os.environ.get("OLLAMA_MODEL") or settings.OLLAMA_MODEL
-        model = level_env or level_setting or default_model
+
+        # Resolution order for model (all via os.environ to avoid stale Settings):
+        #   1. OLLAMA_MODEL_L1 / OLLAMA_MODEL_L2 / OLLAMA_MODEL_L3  (per-level override)
+        #   2. OLLAMA_MODEL                                          (global model)
+        #   3. settings.OLLAMA_MODEL_Lx / settings.OLLAMA_MODEL     (pydantic fallback)
+        #   4. Empty string → caller must handle gracefully
+        level_from_env     = os.environ.get(f"OLLAMA_MODEL_{level}", "").strip()
+        default_from_env   = os.environ.get("OLLAMA_MODEL", "").strip()
+        level_from_setting = (getattr(settings, f"OLLAMA_MODEL_{level}", "") or "").strip()
+        default_from_setting = (settings.OLLAMA_MODEL or "").strip()
+
+        model = (
+            level_from_env
+            or default_from_env
+            or level_from_setting
+            or default_from_setting
+            or ""   # no hardcoded fallback — user must set OLLAMA_MODEL in .env
+        )
+
         return {
             "api_key": "ollama",   # Ollama ignores the key but the SDK requires it
             "base_url": base_url,
@@ -172,14 +198,24 @@ def get_ai_client_params(level: str = "L1") -> dict:
         }
 
     # OpenAI (or any OpenAI-compatible endpoint)
-    api_key = os.environ.get("OPENAI_API_KEY") or settings.OPENAI_API_KEY
-    base_url = os.environ.get("OPENAI_BASE_URL") or settings.OPENAI_BASE_URL or None
-    level_env = os.environ.get(f"AI_MODEL_{level}")
-    level_setting = getattr(settings, f"AI_MODEL_{level}", "gpt-4o-mini")
-    model = level_env or level_setting
+    # Read api_key from os.environ first — Settings may be stale
+    api_key = (
+        os.environ.get("OPENAI_API_KEY", "").strip()
+        or settings.OPENAI_API_KEY
+        or ""
+    )
+    base_url = (
+        os.environ.get("OPENAI_BASE_URL", "").strip()
+        or settings.OPENAI_BASE_URL
+        or None
+    )
+    level_from_env     = os.environ.get(f"AI_MODEL_{level}", "").strip()
+    level_from_setting = (getattr(settings, f"AI_MODEL_{level}", "") or "").strip()
+    model = level_from_env or level_from_setting or "gpt-4o-mini"
+
     return {
         "api_key": api_key,
-        "base_url": base_url,
+        "base_url": base_url or None,
         "model": model,
         "provider": "openai",
     }

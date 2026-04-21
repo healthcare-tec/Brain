@@ -46,9 +46,9 @@ Three levels of intelligence, powered by **Ollama** (local, default) or **OpenAI
 
 | Level | Function | Default Model |
 |-------|----------|---------------|
-| **L1 — Classification** | Classifies inbox items into task/project/note/idea/trash | `gemma3:27b` |
-| **L2 — Interpretation** | Extracts next actions, blockers, PARA category, decision analysis | `gemma3:27b` |
-| **L3 — Analysis** | Detects behavioral patterns, generates weekly review narrative | `gemma3:27b` |
+| **L1 — Classification** | Classifies inbox items into task/project/note/idea/trash | `gemma3:270m` |
+| **L2 — Interpretation** | Extracts next actions, blockers, PARA category, decision analysis | `gemma3:270m` |
+| **L3 — Analysis** | Detects behavioral patterns, generates weekly review narrative | `gemma3:270m` |
 
 ### 8. Feedback System
 Weekly review dashboard with metrics: pending inbox, completed tasks, next actions, project progress, and time estimation accuracy.
@@ -118,14 +118,14 @@ Charlie uses **Ollama** by default. No API key is required — it runs entirely 
 curl -fsSL https://ollama.com/install.sh | sh
 ```
 
-**Step 2 — Pull the model:**
-```bash
-ollama pull gemma3:27b
+**```bash
+# Step 2 — Pull the model:
+ollama pull gemma3:270m
 ```
 
 **Step 3 — Verify Ollama is running:**
 ```bash
-ollama list          # should show gemma3:27b
+ollama list          # should show gemma3:270m
 curl http://localhost:11434/api/tags   # should return JSON
 ```
 
@@ -134,7 +134,7 @@ curl http://localhost:11434/api/tags   # should return JSON
 # Brain/.env
 AI_PROVIDER=ollama
 OLLAMA_BASE_URL=http://localhost:11434/v1
-OLLAMA_MODEL=gemma3:27b
+OLLAMA_MODEL=gemma3:270m
 ```
 
 These are already the defaults — if you copy `.env.example` to `.env` without changes, Ollama will be used automatically.
@@ -154,12 +154,12 @@ OPENAI_API_KEY=sk-your-key-here
 
 ### Using a smaller model for faster classification
 
-The `gemma3:27b` model is accurate but slow on CPU. To speed up L1 classification while keeping L3 analysis at full quality:
+The `gemma3:270m` model is accurate but slow on CPU. To speed up L1 classification while keeping L3 analysis at full quality:
 
 ```ini
 OLLAMA_MODEL_L1=gemma3:4b    # fast, good enough for classification
-OLLAMA_MODEL_L2=gemma3:27b
-OLLAMA_MODEL_L3=gemma3:27b
+OLLAMA_MODEL_L2=gemma3:270m
+OLLAMA_MODEL_L3=gemma3:270m
 ```
 
 All other settings (database path, knowledge base path) are auto-detected and do not need to be set manually.
@@ -262,13 +262,13 @@ If this fails, start Ollama: `ollama serve`
 ```bash
 ollama list
 ```
-If `gemma3:27b` is not listed: `ollama pull gemma3:27b`
+If `gemma3:270m` is not listed: `ollama pull gemma3:270m`
 
 **Check 3 — Test the API directly:**
 ```bash
 curl http://localhost:11434/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model":"gemma3:27b","messages":[{"role":"user","content":"hello"}],"max_tokens":10}'
+  -d '{"model":"gemma3:270m","messages":[{"role":"user","content":"hello"}],"max_tokens":10}'
 ```
 
 **Check 4 — Verify Charlie's AI status:**
