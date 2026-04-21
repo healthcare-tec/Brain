@@ -120,9 +120,10 @@ async def detect_patterns(
         return _stub_patterns(timeframe_days)
 
     try:
+        import os
         from openai import AsyncOpenAI
-
-        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        base_url = os.environ.get("OPENAI_BASE_URL") or None
+        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY, base_url=base_url)
 
         data_summary = f"Timeframe: last {timeframe_days} days\n"
         if task_data:
@@ -138,7 +139,6 @@ async def detect_patterns(
             ],
             max_tokens=settings.AI_MAX_TOKENS_L3,
             temperature=settings.AI_TEMPERATURE_L3,
-            response_format={"type": "json_object"},
         )
 
         raw = response.choices[0].message.content
@@ -184,9 +184,10 @@ async def generate_weekly_review(review_data: Optional[dict] = None) -> dict:
         }
 
     try:
+        import os
         from openai import AsyncOpenAI
-
-        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        base_url = os.environ.get("OPENAI_BASE_URL") or None
+        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY, base_url=base_url)
 
         data_str = json.dumps(review_data, indent=2, default=str) if review_data else "No data provided"
 
@@ -198,7 +199,6 @@ async def generate_weekly_review(review_data: Optional[dict] = None) -> dict:
             ],
             max_tokens=settings.AI_MAX_TOKENS_L3,
             temperature=settings.AI_TEMPERATURE_L3,
-            response_format={"type": "json_object"},
         )
 
         raw = response.choices[0].message.content

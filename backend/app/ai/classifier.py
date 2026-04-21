@@ -108,23 +108,31 @@ async def classify_input(content: str, context: Optional[str] = None) -> dict:
         return _stub_classify(content)
 
     try:
+        import os
         from openai import AsyncOpenAI
 
-        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        # Support proxied endpoints (e.g. Manus sandbox) via OPENAI_BASE_URL env var
+        base_url = os.environ.get("OPENAI_BASE_URL") or None
+        client = AsyncOpenAI(
+            api_key=settings.OPENAI_API_KEY,
+            base_url=base_url,
+        )
 
         user_message = content
         if context:
             user_message = f"Context: {context}\n\nItem: {content}"
 
+        # Append JSON instruction to system prompt (some models ignore response_format)
+        system_with_json = SYSTEM_PROMPT + "\n\nIMPORTANT: Respond with valid JSON only, no markdown."
+
         response = await client.chat.completions.create(
             model=settings.AI_MODEL_L1,
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": system_with_json},
                 {"role": "user", "content": user_message},
             ],
             max_tokens=settings.AI_MAX_TOKENS_L1,
             temperature=settings.AI_TEMPERATURE_L1,
-            response_format={"type": "json_object"},
         )
 
         raw = response.choices[0].message.content

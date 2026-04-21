@@ -166,9 +166,10 @@ async def interpret_content(
     system_prompt = system_prompts.get(interpret_type, SYSTEM_PROMPT_TASK)
 
     try:
+        import os
         from openai import AsyncOpenAI
-
-        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        base_url = os.environ.get("OPENAI_BASE_URL") or None
+        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY, base_url=base_url)
 
         user_message = content
         if extra_context:
@@ -182,7 +183,6 @@ async def interpret_content(
             ],
             max_tokens=settings.AI_MAX_TOKENS_L2,
             temperature=settings.AI_TEMPERATURE_L2,
-            response_format={"type": "json_object"},
         )
 
         raw = response.choices[0].message.content

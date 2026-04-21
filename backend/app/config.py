@@ -73,9 +73,9 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
 
     # Model used for each cognitive level
-    AI_MODEL_L1: str = "gpt-4o-mini"   # L1 Classification
-    AI_MODEL_L2: str = "gpt-4o-mini"   # L2 Interpretation
-    AI_MODEL_L3: str = "gpt-4o"        # L3 Analysis
+    AI_MODEL_L1: str = "gpt-4.1-nano"   # L1 Classification (fast, cheap)
+    AI_MODEL_L2: str = "gpt-4.1-mini"   # L2 Interpretation
+    AI_MODEL_L3: str = "gpt-4.1-mini"   # L3 Analysis (gpt-4o not available in this env)
 
     # Maximum tokens per AI response
     AI_MAX_TOKENS_L1: int = 256
@@ -94,7 +94,8 @@ class Settings(BaseSettings):
     def ai_enabled(self) -> bool:
         """Returns True if an OpenAI API key is configured."""
         key = self.OPENAI_API_KEY or ""
-        return bool(key and key.startswith("sk-"))
+        # Accept both sk- (OpenAI) and any non-empty key (proxied endpoints)
+        return bool(key and len(key) > 8)
 
     class Config:
         # pydantic-settings will also read from env_file as a secondary source
