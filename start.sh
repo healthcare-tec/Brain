@@ -2,6 +2,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Charlie — Cognitive Operating System
 # Startup script — handles Docker Compose V1 and V2 automatically
+# Works as root (no sudo needed)
 # ─────────────────────────────────────────────────────────────────────────────
 set -e
 
@@ -11,21 +12,20 @@ COMPOSE_CMD=""
 if docker compose version &>/dev/null 2>&1; then
     COMPOSE_CMD="docker compose"
 elif command -v docker-compose &>/dev/null; then
-    COMPOSE_CMD="docker-compose"
+    # Test if docker-compose V1 actually works (broken on Python 3.12)
+    if docker-compose version &>/dev/null 2>&1; then
+        COMPOSE_CMD="docker-compose"
+    else
+        echo ""
+        echo "❌  docker-compose is installed but broken (Python 3.12 incompatibility)."
+        echo "    Run: bash install-compose.sh"
+        echo ""
+        exit 1
+    fi
 else
     echo ""
     echo "❌  Docker Compose not found."
-    echo ""
-    echo "Install it with one of the following commands:"
-    echo ""
-    echo "  # Ubuntu/Debian (recommended for Docker 28+):"
-    echo "  sudo apt-get update && sudo apt-get install -y docker-compose-plugin"
-    echo ""
-    echo "  # Or install standalone docker-compose V1:"
-    echo "  sudo apt-get install -y docker-compose"
-    echo ""
-    echo "  # Or install via pip:"
-    echo "  pip install docker-compose"
+    echo "    Run: bash install-compose.sh"
     echo ""
     exit 1
 fi

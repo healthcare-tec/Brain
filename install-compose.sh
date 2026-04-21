@@ -5,7 +5,7 @@
 # Fixes: docker-compose 1.29.2 broken on Python 3.12
 #        (ModuleNotFoundError: No module named 'distutils')
 #
-# Solution: install Docker Compose V2 (pure Go binary, no Python dependency)
+# Works as root (no sudo needed) on aarch64 and x86_64
 # ─────────────────────────────────────────────────────────────────────────────
 set -e
 
@@ -16,18 +16,20 @@ echo ""
 # ── Detect architecture ──────────────────────────────────────────────────────
 ARCH=$(uname -m)
 case $ARCH in
-    x86_64)   ARCH_LABEL="x86_64" ;;
-    aarch64)  ARCH_LABEL="aarch64" ;;
-    armv7l)   ARCH_LABEL="armv7" ;;
+    x86_64)  ARCH_LABEL="x86_64" ;;
+    aarch64) ARCH_LABEL="aarch64" ;;
+    armv7l)  ARCH_LABEL="armv7" ;;
     *)
         echo "❌  Unsupported architecture: $ARCH"
         exit 1
         ;;
 esac
 
-# ── Method 1: apt (Docker official repo) ────────────────────────────────────
+echo "Architecture: $ARCH_LABEL"
+
+# ── Method 1: apt (no sudo needed when running as root) ─────────────────────
 echo "Trying apt install..."
-if sudo apt-get update -qq 2>/dev/null && sudo apt-get install -y docker-compose-plugin 2>/dev/null; then
+if apt-get update -qq 2>/dev/null && apt-get install -y docker-compose-plugin 2>/dev/null; then
     echo ""
     echo "✅  docker-compose-plugin installed via apt."
     docker compose version
@@ -37,22 +39,28 @@ fi
 # ── Method 2: Download binary from GitHub releases ──────────────────────────
 echo "apt method failed, downloading binary from GitHub..."
 
-# Get latest version tag
-COMPOSE_VERSION=$(curl -fsSL https://api.github.com/repos/docker/compose/releases/latest \
+# Use a known stable version (v2.27.1) to avoid API rate limits
+COMPOSE_VERSION="v2.27.1"
+
+# Try to get latest version from GitHub API (optional, fallback to above)
+LATEST=$(curl -fsSL --connect-timeout 5 \
+    "https://api.github.com/repos/docker/compose/releases/latest" 2>/dev/null \
     | grep '"tag_name"' | head -1 | cut -d'"' -f4)
-COMPOSE_VERSION=${COMPOSE_VERSION:-v2.27.1}
+if [ -n "$LATEST" ]; then
+    COMPOSE_VERSION="$LATEST"
+fi
 
 echo "Version: $COMPOSE_VERSION  Arch: $ARCH_LABEL"
 
-# Install to Docker CLI plugins directory
+# Install to system-wide Docker CLI plugins directory
 DEST="/usr/local/lib/docker/cli-plugins"
-sudo mkdir -p "$DEST"
+mkdir -p "$DEST"
 
 URL="https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-linux-${ARCH_LABEL}"
-echo "Downloading from: $URL"
+echo "Downloading: $URL"
 
-sudo curl -fsSL "$URL" -o "$DEST/docker-compose"
-sudo chmod +x "$DEST/docker-compose"
+curl -fsSL "$URL" -o "$DEST/docker-compose"
+chmod +x "$DEST/docker-compose"
 
 echo ""
 echo "✅  Docker Compose V2 installed at $DEST/docker-compose"
