@@ -18,7 +18,19 @@ async function request(path, options = {}) {
   if (res.status === 204) return null;
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || 'Request failed');
+    // FastAPI 422 returns detail as an array of validation errors
+    let message;
+    if (Array.isArray(err.detail)) {
+      message = err.detail
+        .map((e) => {
+          const loc = e.loc ? e.loc.slice(1).join(' → ') : '';
+          return loc ? `${loc}: ${e.msg}` : e.msg;
+        })
+        .join(' | ');
+    } else {
+      message = err.detail || err.message || `HTTP ${res.status}: ${res.statusText}`;
+    }
+    throw new Error(message);
   }
   // For export downloads, return blob
   const ct = res.headers.get('content-type') || '';

@@ -1,8 +1,8 @@
 """Inbox schemas."""
 
 from datetime import datetime
-from typing import Optional
-from pydantic import BaseModel, Field
+from typing import Any, Optional
+from pydantic import BaseModel, Field, model_validator
 from app.models.inbox import InboxStatus
 
 
@@ -17,8 +17,15 @@ class InboxItemClarify(BaseModel):
 
     clarified_as must be one of: task | project | note | idea | trash
     (idea is treated as note internally)
+
+    The field also accepts 'type' as an alias for backward compatibility
+    with older frontend versions.
     """
-    clarified_as: str = Field(..., pattern="^(task|project|note|idea|trash)$")
+    clarified_as: str = Field(
+        ...,
+        pattern="^(task|project|note|idea|trash)$",
+        alias="clarified_as",
+    )
 
     # Optional fields for creating the target entity
     title:       Optional[str] = None
@@ -29,7 +36,17 @@ class InboxItemClarify(BaseModel):
     category:    Optional[str] = None   # For notes: project | area | resource | archive
 
     # Allow any extra fields sent by the frontend without causing 422
-    model_config = {"extra": "allow"}
+    model_config = {"extra": "allow", "populate_by_name": True}
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_type_alias(cls, values: Any) -> Any:
+        """Accept 'type' as alias for clarified_as (legacy / alternate field name)."""
+        if isinstance(values, dict):
+            if "clarified_as" not in values and "type" in values:
+                values = dict(values)  # make a mutable copy
+                values["clarified_as"] = values["type"]
+        return values
 
 
 class InboxItemResponse(BaseModel):
