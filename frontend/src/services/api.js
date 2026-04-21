@@ -103,7 +103,38 @@ export const eventsApi = {
 // ── AI ──────────────────────────────────────────────────────────────────
 
 export const aiApi = {
-  classify: (content) => request(`/ai/classify?content=${encodeURIComponent(content)}`, { method: 'POST' }),
-  interpret: (query) => request(`/ai/interpret?query=${encodeURIComponent(query)}`, { method: 'POST' }),
+  /** Check if AI is configured (returns { ai_enabled, models, message }) */
+  status: () => request('/ai/status'),
+
+  /**
+   * L1 — Classify an inbox item.
+   * Returns { category, confidence, suggested_title, suggested_context,
+   *           suggested_priority, is_time_sensitive, estimated_minutes,
+   *           reasoning, ai_enabled }
+   */
+  classify: (content, context = null) =>
+    request('/ai/classify', {
+      method: 'POST',
+      body: { content, context },
+    }),
+
+  /**
+   * L2 — Interpret content.
+   * interpret_type: "task" | "note" | "decision"
+   */
+  interpret: (content, interpret_type = 'task', extra_context = null) =>
+    request('/ai/interpret', {
+      method: 'POST',
+      body: { content, interpret_type, extra_context },
+    }),
+
+  /** L3 — Detect behavioral patterns */
   patterns: (days = 30) => request(`/ai/patterns?timeframe_days=${days}`),
+
+  /** L3 — Generate weekly review narrative */
+  weeklyReview: (reviewData = null) =>
+    request('/ai/weekly-review', {
+      method: 'POST',
+      body: { review_data: reviewData },
+    }),
 };
