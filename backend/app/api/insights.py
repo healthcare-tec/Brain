@@ -135,7 +135,11 @@ async def get_insights(db: AsyncSession = Depends(get_db)):
             from openai import AsyncOpenAI
             from app.config import get_ai_client_params
             params = get_ai_client_params("L3")
-            client = AsyncOpenAI(api_key=params["api_key"], base_url=params["base_url"])
+            client = AsyncOpenAI(
+                api_key=params["api_key"],
+                base_url=params["base_url"],
+                timeout=params.get("timeout", 60),
+            )
             model = params["model"]
 
             response = await client.chat.completions.create(

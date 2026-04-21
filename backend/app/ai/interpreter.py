@@ -174,6 +174,7 @@ async def interpret_content(
         client = AsyncOpenAI(
             api_key=params["api_key"],
             base_url=params["base_url"],
+            timeout=params.get("timeout", 60),
         )
 
         user_message = content

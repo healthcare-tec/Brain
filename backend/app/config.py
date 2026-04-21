@@ -93,6 +93,11 @@ class Settings(BaseSettings):
     OLLAMA_MODEL_L2: str = ""   # e.g. "gemma3:270m" for interpretation
     OLLAMA_MODEL_L3: str = ""   # e.g. "gemma3:270m" for analysis
 
+    # Timeout in seconds for Ollama API calls.
+    # Large models (e.g. gemma3:270b) can take several minutes to respond.
+    # Default: 300s (5 minutes). Set to 0 to disable timeout.
+    OLLAMA_TIMEOUT: int = 300
+
     # ── OpenAI configuration ─────────────────────────────────────────────────
     # Add your API key to Brain/.env (never commit — it's in .gitignore)
     # Example:  OPENAI_API_KEY=sk-...
@@ -190,11 +195,18 @@ def get_ai_client_params(level: str = "L1") -> dict:
             or ""   # no hardcoded fallback — user must set OLLAMA_MODEL in .env
         )
 
+        # Timeout: read from env first (avoids stale Settings), then Settings, then default
+        try:
+            timeout = int(os.environ.get("OLLAMA_TIMEOUT", "") or settings.OLLAMA_TIMEOUT or 300)
+        except (ValueError, TypeError):
+            timeout = 300
+
         return {
             "api_key": "ollama",   # Ollama ignores the key but the SDK requires it
             "base_url": base_url,
             "model": model,
             "provider": "ollama",
+            "timeout": timeout,
         }
 
     # OpenAI (or any OpenAI-compatible endpoint)

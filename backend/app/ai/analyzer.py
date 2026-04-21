@@ -138,6 +138,7 @@ async def detect_patterns(
         client = AsyncOpenAI(
             api_key=params["api_key"],
             base_url=params["base_url"],
+            timeout=params.get("timeout", 60),
         )
 
         data_summary = f"Timeframe: last {timeframe_days} days\n"
@@ -210,6 +211,7 @@ async def generate_weekly_review(review_data: Optional[dict] = None) -> dict:
         client = AsyncOpenAI(
             api_key=params["api_key"],
             base_url=params["base_url"],
+            timeout=params.get("timeout", 60),
         )
 
         data_str = json.dumps(review_data, indent=2, default=str) if review_data else "No data provided"

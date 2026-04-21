@@ -39,9 +39,14 @@ function ConfidenceBar({ value }) {
 export default function AISuggestionBadge({ suggestion, loading, onApply, onEdit, onDismiss }) {
   if (loading) {
     return (
-      <div className="mt-2 flex items-center gap-2 px-3 py-2 bg-charlie-50 dark:bg-charlie-900/20 border border-charlie-200 dark:border-charlie-800 rounded-lg text-xs text-charlie-600 dark:text-charlie-400">
-        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-        <span>Analyzing with AI...</span>
+      <div className="mt-2 px-3 py-2.5 bg-charlie-50 dark:bg-charlie-900/20 border border-charlie-200 dark:border-charlie-800 rounded-lg">
+        <div className="flex items-center gap-2 text-xs text-charlie-600 dark:text-charlie-400">
+          <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
+          <span className="font-medium">Processando com IA...</span>
+        </div>
+        <p className="text-[10px] text-charlie-400 dark:text-charlie-600 mt-1 leading-relaxed">
+          Modelos grandes (ex: gemma3:270m) podem demorar 1–3 minutos. Aguarde.
+        </p>
       </div>
     );
   }

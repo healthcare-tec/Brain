@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Inbox, ArrowRight, Trash2, Sparkles, Zap, AlertCircle, GripVertical } from 'lucide-react';
+import { Inbox, ArrowRight, Trash2, Sparkles, Zap, AlertCircle, GripVertical, Loader2 } from 'lucide-react';
 import QuickCapture from '../components/QuickCapture';
 import ClarifyModal from '../components/ClarifyModal';
 import AISuggestionBadge from '../components/AISuggestionBadge';
@@ -311,10 +311,18 @@ export default function InboxPage() {
                       <button
                         onClick={() => handleAIClarify(item)}
                         disabled={aiState.loading}
-                        title="Classificar com IA"
-                        className="px-2.5 py-1.5 bg-charlie-50 dark:bg-charlie-900/30 text-charlie-700 dark:text-charlie-300 border border-charlie-200 dark:border-charlie-700 rounded-lg text-xs font-medium hover:bg-charlie-100 dark:hover:bg-charlie-900/50 disabled:opacity-50 transition-colors flex items-center gap-1"
+                        title={aiState.loading ? 'Processando com IA (modelos grandes podem demorar)...' : 'Classificar com IA'}
+                        className={`px-2.5 py-1.5 border rounded-lg text-xs font-medium transition-colors flex items-center gap-1 ${
+                          aiState.loading
+                            ? 'bg-charlie-100 dark:bg-charlie-900/50 text-charlie-600 dark:text-charlie-400 border-charlie-300 dark:border-charlie-600 cursor-wait'
+                            : 'bg-charlie-50 dark:bg-charlie-900/30 text-charlie-700 dark:text-charlie-300 border-charlie-200 dark:border-charlie-700 hover:bg-charlie-100 dark:hover:bg-charlie-900/50 disabled:opacity-50'
+                        }`}
                       >
-                        <Sparkles className="w-3 h-3" />IA
+                        {aiState.loading ? (
+                          <><Loader2 className="w-3 h-3 animate-spin" />Processando...</>
+                        ) : (
+                          <><Sparkles className="w-3 h-3" />IA</>
+                        )}
                       </button>
                       <button
                         onClick={() => { setClarifyInitialData(null); setClarifyItem(item); }}
