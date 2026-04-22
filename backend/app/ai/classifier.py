@@ -23,7 +23,7 @@ import logging
 from typing import Optional
 
 from app.config import settings, get_ai_client_params
-from app.ai.json_parser import parse_ai_json
+from app.ai.json_parser import parse_ai_json, is_template_response
 
 logger = logging.getLogger(__name__)
 
@@ -34,29 +34,34 @@ VALID_CONTEXTS = {
     "@errands", "@waiting", "@anywhere", None,
 }
 
-SYSTEM_PROMPT = """You are Charlie's Classification Engine (Level 1).
+# ── Prompt designed for local LLMs (gemma3, llama, mistral, etc.) ─────────────
+# Key principles for local model prompts:
+#   1. Show a concrete input→output example — models learn by example
+#   2. Never put pipe-separated options as the value in the schema
+#      (models echo them literally instead of choosing one)
+#   3. Keep the schema small — fewer fields = fewer mistakes
+#   4. Put the user input LAST in the message, after all instructions
+#   5. Use "assistant:" priming trick to force JSON-first output
 
-Classify a raw inbox item into exactly one category and extract basic metadata.
-Respond with valid JSON only — no explanation, no markdown fences.
+SYSTEM_PROMPT = """You are a productivity assistant. Classify the user's inbox item.
 
-Categories:
-- "task"    → a single, concrete, actionable item (done in one session)
-- "project" → a multi-step outcome requiring more than one action
-- "note"    → reference information or knowledge (no action required)
-- "idea"    → creative or exploratory thought, not yet actionable
-- "trash"   → noise, duplicate, unclear, or irrelevant content
+Return ONLY a JSON object. No explanation. No markdown. No extra text.
 
-Response schema (JSON only):
-{
-  "category": "task|project|note|idea|trash",
-  "confidence": 0.0-1.0,
-  "suggested_title": "concise title (max 80 chars)",
-  "suggested_context": "@work|@home|@computer|@phone|@errands|@waiting|@anywhere|null",
-  "suggested_priority": "low|medium|high|critical",
-  "is_time_sensitive": true|false,
-  "estimated_minutes": null or integer,
-  "reasoning": "one sentence explaining the classification"
-}"""
+Valid values:
+- category: task, project, note, idea, or trash
+- confidence: number from 0.0 to 1.0
+- suggested_title: short title under 80 characters
+- suggested_context: one of @work @home @computer @phone @errands @waiting @anywhere
+- suggested_priority: low, medium, high, or critical
+- is_time_sensitive: true or false
+- estimated_minutes: a number or null
+- reasoning: one short sentence
+
+Example input: "Call dentist to schedule appointment"
+Example output:
+{"category":"task","confidence":0.95,"suggested_title":"Call dentist to schedule appointment","suggested_context":"@phone","suggested_priority":"medium","is_time_sensitive":false,"estimated_minutes":5,"reasoning":"Single concrete action requiring a phone call."}
+
+Now classify the following item and return ONLY the JSON object:"""
 
 
 def _stub_classify(content: str, reason: str = "AI not configured") -> dict:
@@ -122,12 +127,10 @@ async def classify_input(content: str, context: Optional[str] = None) -> dict:
             timeout=params.get("timeout", 60),
         )
 
+        # Build the user message — item goes AFTER all instructions
         user_message = content
         if context:
-            user_message = f"Context: {context}\n\nItem: {content}"
-
-        # Append JSON instruction — some models (especially local ones) need this
-        system_with_json = SYSTEM_PROMPT + "\n\nIMPORTANT: Respond with valid JSON only, no markdown fences, no extra text."
+            user_message = f"[Context: {context}]\n{content}"
 
         model = params["model"]
         logger.debug("Classifying with provider=%s model=%s", provider, model)
@@ -135,15 +138,27 @@ async def classify_input(content: str, context: Optional[str] = None) -> dict:
         response = await client.chat.completions.create(
             model=model,
             messages=[
-                {"role": "system", "content": system_with_json},
-                {"role": "user", "content": user_message},
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user",   "content": user_message},
             ],
             max_tokens=settings.AI_MAX_TOKENS_L1,
             temperature=settings.AI_TEMPERATURE_L1,
         )
 
         raw = response.choices[0].message.content
-        logger.debug("Raw AI response (classifier): %r", raw[:300] if raw else "<empty>")
+        logger.debug("Raw AI response (classifier): %r", raw[:400] if raw else "<empty>")
+
+        # Detect if the model echoed the template instead of filling it in
+        if is_template_response(raw):
+            logger.warning(
+                "classifier: model echoed the prompt template — falling back to heuristic. "
+                "Consider using a larger/different model. Preview: %r", raw[:120]
+            )
+            result = _stub_classify(content, reason="model echoed template (try a larger model)")
+            result["ai_enabled"] = True
+            result["ai_error"] = "Model returned template instead of real classification"
+            result["provider"] = provider
+            return result
 
         result = parse_ai_json(raw)
 

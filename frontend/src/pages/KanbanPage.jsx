@@ -1,18 +1,15 @@
 /**
- * KanbanPage — GTD Kanban board with working drag & drop between columns.
+ * KanbanPage — GTD Kanban board with drag & drop AND arrow button navigation.
  *
- * Drag & drop implementation notes:
- * - Uses dataTransfer.setData/getData as the source of truth for the dragged
- *   task ID. This avoids the race condition where React state (draggedTask)
- *   can be cleared by onDragEnd before onDrop fires in some browsers.
- * - Optimistic UI: the task moves visually immediately; if the API call fails,
- *   the board reloads to show the real state.
- * - onDragEnd on the card resets the "dragging" visual but does NOT clear
- *   draggedTaskId — that is only cleared after the drop is processed.
+ * Arrow buttons (← →) on each card allow moving tasks between columns
+ * without drag & drop — essential for touch/mobile devices.
+ *
+ * Drag & drop still works on desktop via dataTransfer (browser-native).
+ * Both methods use optimistic UI: the card moves immediately, reverts on error.
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Columns3, GripVertical, Clock, Tag, AlertCircle } from 'lucide-react';
+import { Columns3, GripVertical, Clock, Tag, AlertCircle, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { tasksApi } from '../services/api';
 
 const COLUMNS = [
@@ -22,6 +19,8 @@ const COLUMNS = [
   { key: 'done',        label: 'Done',         color: 'border-t-green-500',  bg: 'bg-green-50 dark:bg-green-900/20' },
 ];
 
+const COLUMN_KEYS = COLUMNS.map((c) => c.key);
+
 const PRIORITY_COLORS = {
   critical: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
   high:     'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
@@ -29,15 +28,33 @@ const PRIORITY_COLORS = {
   low:      'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
 };
 
-function KanbanCard({ task, draggingId }) {
+function KanbanCard({ task, draggingId, onMove }) {
   const tags = task.tags ? task.tags.split(',').filter(Boolean) : [];
   const isDragging = draggingId === task.id;
+
+  const colIndex  = COLUMN_KEYS.indexOf(task.status);
+  const canGoLeft  = colIndex > 0;
+  const canGoRight = colIndex < COLUMN_KEYS.length - 1;
+
+  const prevCol = canGoLeft  ? COLUMN_KEYS[colIndex - 1] : null;
+  const nextCol = canGoRight ? COLUMN_KEYS[colIndex + 1] : null;
+
+  const [moving, setMoving] = useState(false);
+
+  const handleMove = async (targetStatus) => {
+    if (moving) return;
+    setMoving(true);
+    try {
+      await onMove(task.id, targetStatus);
+    } finally {
+      setMoving(false);
+    }
+  };
 
   return (
     <div
       draggable
       onDragStart={(e) => {
-        // Store task id in dataTransfer — this survives across React re-renders
         e.dataTransfer.setData('text/plain', task.id);
         e.dataTransfer.effectAllowed = 'move';
       }}
@@ -46,7 +63,7 @@ function KanbanCard({ task, draggingId }) {
       }`}
     >
       <div className="flex items-start gap-2">
-        <GripVertical className="w-4 h-4 text-gray-300 dark:text-gray-600 flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+        <GripVertical className="w-4 h-4 text-gray-300 dark:text-gray-600 flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity hidden sm:block" />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-gray-900 dark:text-gray-100 leading-snug">{task.title}</p>
 
@@ -88,6 +105,53 @@ function KanbanCard({ task, draggingId }) {
               Due: {new Date(task.due_date).toLocaleDateString()}
             </p>
           )}
+
+          {/* ── Arrow navigation buttons ── */}
+          <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-gray-100 dark:border-gray-700">
+            {/* Left arrow — move to previous column */}
+            {canGoLeft ? (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleMove(prevCol); }}
+                disabled={moving}
+                title={`Move to ${COLUMNS[colIndex - 1].label}`}
+                className="flex items-center gap-1 text-xs text-gray-400 hover:text-charlie-600 dark:hover:text-charlie-400 disabled:opacity-40 transition-colors px-1.5 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                {moving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ChevronLeft className="w-3.5 h-3.5" />}
+                <span className="hidden sm:inline">{COLUMNS[colIndex - 1].label}</span>
+              </button>
+            ) : (
+              <div className="w-6" /> /* spacer to keep right arrow aligned */
+            )}
+
+            {/* Column position indicator dots */}
+            <div className="flex items-center gap-1">
+              {COLUMN_KEYS.map((k, i) => (
+                <div
+                  key={k}
+                  className={`w-1.5 h-1.5 rounded-full transition-colors ${
+                    i === colIndex
+                      ? 'bg-charlie-500'
+                      : 'bg-gray-200 dark:bg-gray-600'
+                  }`}
+                />
+              ))}
+            </div>
+
+            {/* Right arrow — move to next column */}
+            {canGoRight ? (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleMove(nextCol); }}
+                disabled={moving}
+                title={`Move to ${COLUMNS[colIndex + 1].label}`}
+                className="flex items-center gap-1 text-xs text-gray-400 hover:text-charlie-600 dark:hover:text-charlie-400 disabled:opacity-40 transition-colors px-1.5 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                <span className="hidden sm:inline">{COLUMNS[colIndex + 1].label}</span>
+                {moving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ChevronRight className="w-3.5 h-3.5" />}
+              </button>
+            ) : (
+              <div className="w-6" /> /* spacer */
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -95,13 +159,12 @@ function KanbanCard({ task, draggingId }) {
 }
 
 export default function KanbanPage() {
-  const [tasks, setTasks]           = useState([]);
-  const [loading, setLoading]       = useState(true);
+  const [tasks, setTasks]             = useState([]);
+  const [loading, setLoading]         = useState(true);
   const [dragOverCol, setDragOverCol] = useState(null);
-  const [draggingId, setDraggingId] = useState(null);
-  const [error, setError]           = useState(null);
+  const [draggingId, setDraggingId]   = useState(null);
+  const [error, setError]             = useState(null);
 
-  // Use a ref so the drop handler always has the latest tasks without stale closure
   const tasksRef = useRef(tasks);
   useEffect(() => { tasksRef.current = tasks; }, [tasks]);
 
@@ -120,42 +183,13 @@ export default function KanbanPage() {
 
   useEffect(() => { loadTasks(); }, [loadTasks]);
 
-  // ── Drag handlers ──────────────────────────────────────────────────────────
+  // ── Shared move logic (used by both drag & drop and arrow buttons) ─────────
 
-  const handleDragStart = (e) => {
-    const taskId = e.dataTransfer.getData('text/plain');
-    // dataTransfer is not yet available in dragstart on some browsers —
-    // instead we read it from the event target's data attribute set by KanbanCard
-    // Actually dataTransfer IS available in dragstart; just track visually:
-    setDraggingId(e.target.closest('[draggable]')?.dataset?.taskId || null);
-  };
-
-  const handleColumnDragOver = (e, colKey) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    setDragOverCol(colKey);
-  };
-
-  const handleColumnDragLeave = (e) => {
-    // Only clear if leaving the column element itself, not a child
-    if (!e.currentTarget.contains(e.relatedTarget)) {
-      setDragOverCol(null);
-    }
-  };
-
-  const handleDrop = async (e, targetStatus) => {
-    e.preventDefault();
-    setDragOverCol(null);
-    setDraggingId(null);
-
-    const taskId = e.dataTransfer.getData('text/plain');
-    if (!taskId) return;
-
+  const moveTask = useCallback(async (taskId, targetStatus) => {
     const task = tasksRef.current.find((t) => t.id === taskId);
-    if (!task) return;
-    if (task.status === targetStatus) return;  // no-op
+    if (!task || task.status === targetStatus) return;
 
-    // Optimistic update — move card immediately in UI
+    // Optimistic update
     setTasks((prev) =>
       prev.map((t) => t.id === taskId ? { ...t, status: targetStatus } : t)
     );
@@ -172,6 +206,28 @@ export default function KanbanPage() {
       // Revert optimistic update
       await loadTasks();
     }
+  }, [loadTasks]);
+
+  // ── Drag & drop handlers ───────────────────────────────────────────────────
+
+  const handleColumnDragOver = (e, colKey) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverCol(colKey);
+  };
+
+  const handleColumnDragLeave = (e) => {
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      setDragOverCol(null);
+    }
+  };
+
+  const handleDrop = async (e, targetStatus) => {
+    e.preventDefault();
+    setDragOverCol(null);
+    setDraggingId(null);
+    const taskId = e.dataTransfer.getData('text/plain');
+    if (taskId) await moveTask(taskId, targetStatus);
   };
 
   const getColumnTasks = (status) => tasks.filter((t) => t.status === status);
@@ -185,7 +241,9 @@ export default function KanbanPage() {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Kanban Board</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Drag tasks between columns to change status</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Drag cards or use <ChevronLeft className="inline w-3.5 h-3.5" /><ChevronRight className="inline w-3.5 h-3.5" /> arrows to move tasks
+          </p>
         </div>
         <span className="ml-auto px-3 py-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded-full text-sm">
           {tasks.length} tasks
@@ -202,15 +260,15 @@ export default function KanbanPage() {
       )}
 
       {loading ? (
-        <div className="text-center py-12 text-gray-400 dark:text-gray-500">Loading...</div>
+        <div className="flex items-center justify-center py-12 gap-2 text-gray-400 dark:text-gray-500">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          <span>Loading...</span>
+        </div>
       ) : (
-        <div
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 flex-1 min-h-0"
-          onDragStart={handleDragStart}
-        >
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 flex-1 min-h-0">
           {COLUMNS.map((col) => {
             const colTasks = getColumnTasks(col.key);
-            const isOver = dragOverCol === col.key;
+            const isOver   = dragOverCol === col.key;
 
             return (
               <div
@@ -232,7 +290,7 @@ export default function KanbanPage() {
                   </span>
                 </div>
 
-                {/* Drop zone hint when dragging over empty column */}
+                {/* Drop zone hint */}
                 {isOver && colTasks.length === 0 && (
                   <div className="mx-3 mb-2 py-4 border-2 border-dashed border-charlie-300 dark:border-charlie-700 rounded-lg text-center text-xs text-charlie-500 dark:text-charlie-400">
                     Drop here
@@ -251,6 +309,7 @@ export default function KanbanPage() {
                         key={task.id}
                         task={task}
                         draggingId={draggingId}
+                        onMove={moveTask}
                       />
                     ))
                   )}

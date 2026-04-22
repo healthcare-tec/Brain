@@ -13,6 +13,9 @@ often return JSON that is technically invalid:
 parse_ai_json(text) tries each strategy in order and returns the first
 successfully parsed dict/list, or raises ValueError with a diagnostic
 message if all strategies fail.
+
+is_template_response(text) detects when the model echoed the prompt
+template instead of filling it in (common with smaller local models).
 """
 
 import json
@@ -188,3 +191,76 @@ def parse_ai_json(text: str) -> dict | list:
         f"Last error: {last_error}. "
         f"Response preview: {preview!r}"
     )
+
+
+# ── Template detection ────────────────────────────────────────────────────────
+
+# These strings appear in prompt templates/schemas but should NEVER appear as
+# actual values in a real AI response. If the parsed JSON contains any of them
+# as a field value, the model echoed the template instead of filling it in.
+_TEMPLATE_VALUE_MARKERS = [
+    # classifier.py schema markers
+    "task|project|note|idea|trash",
+    "0.0-1.0",
+    "concise title (max 80 chars)",
+    "@work|@home|@computer|@phone|@errands|@waiting|@anywhere",
+    "low|medium|high|critical",
+    "null or integer",
+    "one sentence explaining",
+    # interpreter.py schema markers
+    "the very next concrete physical action",
+    "low|medium|high",
+    "true|false",
+    "who could do this, or null",
+    # analyzer.py schema markers
+    "positive|negative|neutral",
+    "overestimates|underestimates|accurate|insufficient_data",
+    "reversible|partially-reversible|irreversible",
+    # Generic template indicators
+    "description of the pattern",
+    "what data supports this",
+]
+
+
+def is_template_response(text: str) -> bool:
+    """
+    Return True if the AI response appears to be an echoed prompt template
+    rather than a real classification/analysis.
+
+    Checks both the raw text and, if parseable, the JSON values.
+
+    Args:
+        text: Raw string returned by the AI model.
+
+    Returns:
+        True if the response looks like a template echo, False otherwise.
+    """
+    if not text:
+        return False
+
+    text_lower = text.lower()
+
+    # Quick check on raw text — template markers are very distinctive
+    for marker in _TEMPLATE_VALUE_MARKERS:
+        if marker.lower() in text_lower:
+            logger.debug("is_template_response: found marker %r in raw text", marker)
+            return True
+
+    # Also check parsed JSON values for template strings
+    try:
+        parsed = parse_ai_json(text)
+        if isinstance(parsed, dict):
+            for key, value in parsed.items():
+                if isinstance(value, str):
+                    value_lower = value.lower()
+                    for marker in _TEMPLATE_VALUE_MARKERS:
+                        if marker.lower() in value_lower:
+                            logger.debug(
+                                "is_template_response: field %r has template value %r",
+                                key, value[:80]
+                            )
+                            return True
+    except (ValueError, Exception):
+        pass  # If we can't parse it, the raw text check above is sufficient
+
+    return False
