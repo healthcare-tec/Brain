@@ -68,13 +68,22 @@ async def clarify(
     target = data.clarified_as if data.clarified_as != "idea" else "note"
 
     if target == "task":
-        # Map priority string to a safe value
-        priority = data.priority if data.priority in ("low", "medium", "high", "urgent") else "medium"
+        # Map priority to a value accepted by TaskPriority enum: low|medium|high|critical
+        # "urgent" (legacy frontend value) is mapped to "critical"
+        _raw_priority = (data.priority or "").lower()
+        if _raw_priority == "urgent":
+            priority = "critical"
+        elif _raw_priority in ("low", "medium", "high", "critical"):
+            priority = _raw_priority
+        else:
+            priority = "medium"
+        # Blind project_id: pass None if empty string or non-existent to avoid FK error
+        project_id = data.project_id or None
         task = Task(
             title=data.title or item.content[:500],
             description=data.description or item.content,
             context=data.context,
-            project_id=data.project_id,
+            project_id=project_id,
             status=TaskStatus.NEXT,
             priority=priority,
         )

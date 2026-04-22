@@ -2,6 +2,8 @@
 Capture Engine + Clarification Engine API endpoints.
 """
 
+import traceback
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -47,6 +49,12 @@ async def clarify_item(
         return await inbox_service.clarify(db, item_id, data)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        traceback.print_exc()  # prints full stack trace to uvicorn logs
+        raise HTTPException(
+            status_code=500,
+            detail=f"Clarify failed: {type(e).__name__}: {e}",
+        )
 
 
 @router.delete("/{item_id}", status_code=204)

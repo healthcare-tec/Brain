@@ -147,7 +147,7 @@ export default function ClarifyModal({ item, initialData, onClarify, onClose }) 
                   <option value="low">Low</option>
                   <option value="medium">Medium</option>
                   <option value="high">High</option>
-                  <option value="urgent">Urgent</option>
+                  <option value="critical">Critical</option>
                 </select>
               </div>
 

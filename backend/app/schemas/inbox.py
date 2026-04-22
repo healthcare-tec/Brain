@@ -32,7 +32,7 @@ class InboxItemClarify(BaseModel):
     description: Optional[str] = None
     project_id:  Optional[str] = None
     context:     Optional[str] = None
-    priority:    Optional[str] = None   # low | medium | high | urgent
+    priority:    Optional[str] = None   # low | medium | high | critical ("urgent" is mapped to "critical" for backward compat)
     category:    Optional[str] = None   # For notes: project | area | resource | archive
 
     # Allow any extra fields sent by the frontend without causing 422
