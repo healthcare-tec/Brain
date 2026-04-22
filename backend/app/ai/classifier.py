@@ -19,11 +19,11 @@ Categories:
   - trash     → noise, duplicate, or irrelevant content
 """
 
-import json
 import logging
 from typing import Optional
 
 from app.config import settings, get_ai_client_params
+from app.ai.json_parser import parse_ai_json
 
 logger = logging.getLogger(__name__)
 
@@ -143,16 +143,9 @@ async def classify_input(content: str, context: Optional[str] = None) -> dict:
         )
 
         raw = response.choices[0].message.content
+        logger.debug("Raw AI response (classifier): %r", raw[:300] if raw else "<empty>")
 
-        # Strip markdown fences if the model added them anyway
-        raw = raw.strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-            raw = raw.strip()
-
-        result = json.loads(raw)
+        result = parse_ai_json(raw)
 
         # Validate and sanitize
         if result.get("category") not in VALID_CATEGORIES:

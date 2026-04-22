@@ -19,6 +19,7 @@ import logging
 from typing import Optional
 
 from app.config import settings, get_ai_client_params
+from app.ai.json_parser import parse_ai_json
 
 logger = logging.getLogger(__name__)
 
@@ -105,17 +106,6 @@ def _stub_patterns(timeframe_days: int = 30) -> dict:
     }
 
 
-def _strip_fences(raw: str) -> str:
-    """Remove markdown code fences that some models add despite instructions."""
-    raw = raw.strip()
-    if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
-        raw = raw.strip()
-    return raw
-
-
 async def detect_patterns(
     timeframe_days: int = 30,
     task_data: Optional[dict] = None,
@@ -161,8 +151,9 @@ async def detect_patterns(
             temperature=settings.AI_TEMPERATURE_L3,
         )
 
-        raw = _strip_fences(response.choices[0].message.content)
-        result = json.loads(raw)
+        raw = response.choices[0].message.content
+        logger.debug("Raw AI response (patterns): %r", raw[:300] if raw else "<empty>")
+        result = parse_ai_json(raw)
         result["ai_enabled"] = True
         result["model"] = model
         result["provider"] = provider
@@ -229,8 +220,9 @@ async def generate_weekly_review(review_data: Optional[dict] = None) -> dict:
             temperature=settings.AI_TEMPERATURE_L3,
         )
 
-        raw = _strip_fences(response.choices[0].message.content)
-        result = json.loads(raw)
+        raw = response.choices[0].message.content
+        logger.debug("Raw AI response (weekly review): %r", raw[:300] if raw else "<empty>")
+        result = parse_ai_json(raw)
         result["ai_enabled"] = True
         result["model"] = model
         result["provider"] = provider

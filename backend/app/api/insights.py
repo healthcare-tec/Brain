@@ -1,7 +1,9 @@
 """AI Proactive Insights API — detects patterns, stale tasks, estimation issues."""
 
 import json
+import logging
 from datetime import datetime, timedelta
+
 from fastapi import APIRouter, Depends
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +12,9 @@ from app.database import get_db
 from app.config import settings
 from app.models.task import Task, TaskStatus
 from app.models.event import TaskEvent
+from app.ai.json_parser import parse_ai_json
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -157,16 +162,12 @@ async def get_insights(db: AsyncSession = Depends(get_db)):
                     {"role": "user", "content": json.dumps(data, default=str)},
                 ],
             )
-            raw = response.choices[0].message.content.strip()
-            if raw.startswith("```"):
-                raw = raw.split("```")[1]
-                if raw.startswith("json"):
-                    raw = raw[4:]
-                raw = raw.strip()
-            ai_result = json.loads(raw)
+            raw = response.choices[0].message.content
+            logger.debug("Raw AI response (insights): %r", raw[:300] if raw else "<empty>")
+            ai_result = parse_ai_json(raw)
             ai_analysis = ai_result.get("insights", [])
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("AI insights failed: %s", exc)
 
     return {
         "generated_at": datetime.utcnow().isoformat(),

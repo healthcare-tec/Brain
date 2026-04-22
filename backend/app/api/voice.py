@@ -1,15 +1,21 @@
 """Voice Capture API — receives transcribed text and uses AI to split into multiple inbox items."""
 
 import json
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.ai.json_parser import parse_ai_json
+
 from app.config import settings
 from app.models.inbox import InboxItem
 from app.events.emitter import emit_event
 from app.models.event import EventType
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -62,15 +68,12 @@ async def _split_with_ai(text: str) -> list[dict]:
             ],
         )
 
-        raw = response.choices[0].message.content.strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-            raw = raw.strip()
-        result = json.loads(raw)
+        raw = response.choices[0].message.content
+        logger.debug("Raw AI response (voice): %r", raw[:300] if raw else "<empty>")
+        result = parse_ai_json(raw)
         return result.get("items", [{"content": text, "type_hint": "task"}])
-    except Exception:
+    except Exception as exc:
+        logger.warning("AI voice split failed: %s", exc)
         return _split_simple(text)
 
 

@@ -13,11 +13,11 @@ Supports two AI providers (configured via AI_PROVIDER in .env):
 Falls back to structured stub response if AI is unavailable.
 """
 
-import json
 import logging
 from typing import Optional
 
 from app.config import settings, get_ai_client_params
+from app.ai.json_parser import parse_ai_json
 
 logger = logging.getLogger(__name__)
 
@@ -195,16 +195,9 @@ async def interpret_content(
         )
 
         raw = response.choices[0].message.content
+        logger.debug("Raw AI response (interpreter): %r", raw[:300] if raw else "<empty>")
 
-        # Strip markdown fences if the model added them
-        raw = raw.strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-            raw = raw.strip()
-
-        result = json.loads(raw)
+        result = parse_ai_json(raw)
         result["ai_enabled"] = True
         result["model"] = model
         result["provider"] = provider
