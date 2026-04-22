@@ -34,6 +34,7 @@ class InboxItemClarify(BaseModel):
     context:     Optional[str] = None
     priority:    Optional[str] = None   # low | medium | high | critical ("urgent" is mapped to "critical" for backward compat)
     category:    Optional[str] = None   # For notes: project | area | resource | archive
+    idea_destination: Optional[str] = None  # For ideas: thinking | notes | both (default: both)
 
     # Allow any extra fields sent by the frontend without causing 422
     model_config = {"extra": "allow", "populate_by_name": True}

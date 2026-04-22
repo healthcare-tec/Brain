@@ -1,9 +1,14 @@
 /**
  * ClarifyModal — GTD clarification modal with dark mode and proper error handling.
  * Can be opened manually or pre-filled from AI suggestion.
+ *
+ * When the type is "idea", shows a sub-menu to choose the destination:
+ *   - Thinking (Decision Logs) — for analysis and exploration
+ *   - Notes (Knowledge Base)   — for future reference
+ *   - Both (default)           — creates entries in both places
  */
 import React, { useState, useEffect } from 'react';
-import { X, CheckSquare, FolderKanban, FileText, Trash2, Lightbulb, Sparkles, AlertCircle } from 'lucide-react';
+import { X, CheckSquare, FolderKanban, FileText, Trash2, Lightbulb, Sparkles, AlertCircle, Brain, BookOpen, Layers } from 'lucide-react';
 import { projectsApi } from '../services/api';
 
 const TYPES = [
@@ -14,6 +19,33 @@ const TYPES = [
   { value: 'trash',   label: 'Trash',   icon: Trash2,       color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' },
 ];
 
+const IDEA_DESTINATIONS = [
+  {
+    value: 'both',
+    label: 'Ambos',
+    sublabel: 'Thinking + Notes',
+    icon: Layers,
+    color: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300',
+    description: 'Cria um Decision Log no Thinking Engine e uma Note na Knowledge Base.',
+  },
+  {
+    value: 'thinking',
+    label: 'Thinking',
+    sublabel: 'Analisar ideia',
+    icon: Brain,
+    color: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300',
+    description: 'Cria um Decision Log para explorar e desenvolver a ideia.',
+  },
+  {
+    value: 'notes',
+    label: 'Notes',
+    sublabel: 'Guardar referência',
+    icon: BookOpen,
+    color: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300',
+    description: 'Salva como nota de referência na Knowledge Base (PARA).',
+  },
+];
+
 export default function ClarifyModal({ item, initialData, onClarify, onClose }) {
   const aiPrefilled = !!initialData;
   const initType     = initialData?.category     || 'task';
@@ -21,16 +53,17 @@ export default function ClarifyModal({ item, initialData, onClarify, onClose }) 
   const initContext  = initialData?.suggested_context || '';
   const initPriority = initialData?.suggested_priority || 'medium';
 
-  const [clarifiedAs,  setClarifiedAs]  = useState(initType);
-  const [title,        setTitle]        = useState(initTitle);
-  const [description,  setDescription]  = useState('');
-  const [context,      setContext]      = useState(initContext);
-  const [priority,     setPriority]     = useState(initPriority);
-  const [projectId,    setProjectId]    = useState('');
-  const [category,     setCategory]     = useState('resource');
-  const [projects,     setProjects]     = useState([]);
-  const [loading,      setLoading]      = useState(false);
-  const [error,        setError]        = useState(null);
+  const [clarifiedAs,      setClarifiedAs]      = useState(initType);
+  const [title,            setTitle]            = useState(initTitle);
+  const [description,      setDescription]      = useState('');
+  const [context,          setContext]          = useState(initContext);
+  const [priority,         setPriority]         = useState(initPriority);
+  const [projectId,        setProjectId]        = useState('');
+  const [category,         setCategory]         = useState('resource');
+  const [ideaDestination,  setIdeaDestination]  = useState('both');
+  const [projects,         setProjects]         = useState([]);
+  const [loading,          setLoading]          = useState(false);
+  const [error,            setError]            = useState(null);
 
   useEffect(() => { projectsApi.list().then(setProjects).catch(() => {}); }, []);
 
@@ -49,25 +82,27 @@ export default function ClarifyModal({ item, initialData, onClarify, onClose }) 
     setError(null);
     try {
       await onClarify(item.id, {
-        clarified_as: clarifiedAs,   // backend now accepts: task|project|note|idea|trash
-        title:       clarifiedAs !== 'trash' ? (title || item.content.slice(0, 200)) : undefined,
-        description: description || undefined,
-        context:     context     || undefined,
-        priority:    priority    || 'medium',
-        project_id:  projectId   || undefined,
-        category:    (clarifiedAs === 'note' || clarifiedAs === 'idea') ? category : undefined,
+        clarified_as:     clarifiedAs,
+        title:            clarifiedAs !== 'trash' ? (title || item.content.slice(0, 200)) : undefined,
+        description:      description || undefined,
+        context:          context     || undefined,
+        priority:         priority    || 'medium',
+        project_id:       projectId   || undefined,
+        category:         (clarifiedAs === 'note') ? category : undefined,
+        idea_destination: clarifiedAs === 'idea' ? ideaDestination : undefined,
       });
       onClose();
     } catch (err) {
-      // Show a visible error instead of silently failing
       setError(err?.message || 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const inputClass  = "w-full px-3 py-2 border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-charlie-300";
-  const labelClass  = "block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1";
+  const inputClass = "w-full px-3 py-2 border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-charlie-300";
+  const labelClass = "block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1";
+
+  const selectedDestination = IDEA_DESTINATIONS.find((d) => d.value === ideaDestination) || IDEA_DESTINATIONS[0];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -124,6 +159,37 @@ export default function ClarifyModal({ item, initialData, onClarify, onClose }) 
             ))}
           </div>
 
+          {/* ── Idea destination sub-menu ───────────────────────────────────── */}
+          {clarifiedAs === 'idea' && (
+            <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-800 rounded-xl">
+              <p className="text-xs font-semibold text-yellow-700 dark:text-yellow-400 mb-2 flex items-center gap-1.5">
+                <Lightbulb className="w-3.5 h-3.5" />
+                Enviar ideia para:
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                {IDEA_DESTINATIONS.map(({ value, label, sublabel, icon: Icon, color }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setIdeaDestination(value)}
+                    className={`flex flex-col items-center gap-1 p-2.5 rounded-lg border-2 transition-all text-xs font-medium ${
+                      ideaDestination === value
+                        ? `border-yellow-400 dark:border-yellow-600 ${color}`
+                        : 'border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500 bg-white dark:bg-gray-700'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span>{label}</span>
+                    <span className="text-gray-400 dark:text-gray-500 font-normal">{sublabel}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-yellow-600 dark:text-yellow-500 mt-2 italic">
+                {selectedDestination.description}
+              </p>
+            </div>
+          )}
+
           {/* Form fields (hidden for trash) */}
           {clarifiedAs !== 'trash' && (
             <form onSubmit={handleSubmit} className="space-y-3">
@@ -139,19 +205,22 @@ export default function ClarifyModal({ item, initialData, onClarify, onClose }) 
                 <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className={inputClass} />
               </div>
 
-              <div>
-                <label className={labelClass}>
-                  Priority {aiPrefilled && initPriority === priority && <span className="ml-1 text-charlie-500 font-normal">(AI)</span>}
-                </label>
-                <select value={priority} onChange={(e) => setPriority(e.target.value)} className={inputClass}>
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="critical">Critical</option>
-                </select>
-              </div>
+              {/* Priority — not shown for idea (ideas don't have priority) */}
+              {clarifiedAs !== 'idea' && (
+                <div>
+                  <label className={labelClass}>
+                    Priority {aiPrefilled && initPriority === priority && <span className="ml-1 text-charlie-500 font-normal">(AI)</span>}
+                  </label>
+                  <select value={priority} onChange={(e) => setPriority(e.target.value)} className={inputClass}>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                  </select>
+                </div>
+              )}
 
-              {(clarifiedAs === 'task' || clarifiedAs === 'idea') && (
+              {clarifiedAs === 'task' && (
                 <>
                   <div>
                     <label className={labelClass}>
@@ -169,7 +238,7 @@ export default function ClarifyModal({ item, initialData, onClarify, onClose }) 
                 </>
               )}
 
-              {(clarifiedAs === 'note' || clarifiedAs === 'idea') && (
+              {clarifiedAs === 'note' && (
                 <div>
                   <label className={labelClass}>Category (PARA)</label>
                   <select value={category} onChange={(e) => setCategory(e.target.value)} className={inputClass}>
@@ -183,7 +252,11 @@ export default function ClarifyModal({ item, initialData, onClarify, onClose }) 
 
               <button type="submit" disabled={loading}
                 className="w-full py-2.5 bg-charlie-600 text-white rounded-lg text-sm font-medium hover:bg-charlie-700 disabled:opacity-50 transition-colors">
-                {loading ? 'Processing...' : `Clarify as ${clarifiedAs}`}
+                {loading
+                  ? 'Processing...'
+                  : clarifiedAs === 'idea'
+                    ? `Salvar ideia → ${selectedDestination.label}`
+                    : `Clarify as ${clarifiedAs}`}
               </button>
             </form>
           )}
